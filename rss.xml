@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BİFTEK RSS Beslemesi</title>
+    <meta name="description" content="Bilim, Fen ve Teknoloji Kulübü en son haberler RSS akışı">
+</head>
+<body>
+    <script>
+        // Firebase SDK'larını yükle (Modüler yapı)
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+        import { getFirestore, collection, getDocs, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+
+        // Firebase Konfigürasyonu (app.js'deki ile aynı olmalı)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Firebase'i başlat
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // RSS Oluşturma Fonksiyonu
+        async function generateRSS() {
+            try {
+                const articlesRef = collection(db, 'articles');
+                const q = query(articlesRef, orderBy('createdAt', 'desc'), limit(20));
+                const snapshot = await getDocs(q);
+                
+                let xml = '<?xml version="1.0" encoding="UTF-8" ?>\n';
+                xml += '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n';
+                xml += '<channel>\n';
+                xml += '  <title>BİFTEK - Bilim ve Teknoloji Haberleri</title>\n';
+                xml += '  <link>https://biftek-haberleri.com</link>\n';
+                xml += '  <description>Bilim, Fen ve Teknoloji Kulübü\'nün resmi haber platformu.</description>\n';
+                xml += '  <language>tr-tr</language>\n';
+                xml += '  <lastBuildDate>' + new Date().toUTCString() + '</lastBuildDate>\n';
+                xml += '  <atom:link href="https://biftek-haberleri.com/rss.xml" rel="self" type="application/rss+xml"/>\n';
+
+                snapshot.forEach((doc) => {
+                    const article = doc.data();
+                    const pubDate = article.createdAt ? article.createdAt.toDate().toUTCString() : new Date().toUTCString();
+                    const description = article.summary || article.content.substring(0, 200) + '...';
+                    const link = `https://biftek-haberleri.com/article.html?id=${doc.id}`;
+                    
+                    xml += '  <item>\n';
+                    xml += `    <title><![CDATA[${article.title}]]></title>\n`;
+                    xml += `    <link>${link}</link>\n`;
+                    xml += `    <guid isPermaLink="true">${link}</guid>\n`;
+                    xml += `    <description><![CDATA[${description}]]></description>\n`;
+                    xml += `    <pubDate>${pubDate}</pubDate>\n`;
+                    xml += `    <category>${article.category || 'Genel'}</category>\n`;
+                    if (article.authorName) {
+                        xml += `    <author>${article.authorName}</author>\n`;
+                    }
+                    xml += '  </item>\n';
+                });
+
+                xml += '</channel>\n';
+                xml += '</rss>';
+
+                // XML içeriğini sayfaya yazdır ve MIME tipini ayarla
+                document.open();
+                document.write(xml);
+                document.close();
+                
+            } catch (error) {
+                console.error("RSS oluşturulurken hata:", error);
+                // Hata durumunda boş bir RSS döndür
+                document.open();
+                document.write('<?xml version="1.0" encoding="UTF-8" ?><rss><channel><title>Hata</title><description>RSS oluşturulamadı.</description></channel></rss>');
+                document.close();
+            }
+        }
+
+        // Sayfa yüklendiğinde çalıştır
+        window.addEventListener('load', generateRSS);
+    </script>
+</body>
+</html>

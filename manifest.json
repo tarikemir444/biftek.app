@@ -1,0 +1,27 @@
+{
+  "name": "BİFTEK - Bilim ve Teknoloji Haberleri",
+  "short_name": "BİFTEK",
+  "description": "Bilim, Fen ve Teknoloji Kulübü'nün resmi haber platformu.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1d1d1f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192.png?text=BIFTEK",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512.png?text=BIFTEK",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["news", "science", "technology"],
+  "lang": "tr",
+  "dir": "ltr"
+}

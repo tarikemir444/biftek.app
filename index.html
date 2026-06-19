@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BİFTEK — Bilim, Fen ve Teknoloji Kulübü</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1d1d1f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="BİFTEK">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <div class="logo">
+                <h1>BİFTEK</h1>
+            </div>
+            <div class="nav-buttons" id="guestButtons">
+                <button class="btn btn-login">Giriş Yap</button>
+                <button class="btn btn-register">Kayıt Ol</button>
+            </div>
+            <div class="profile-menu" id="profileMenu" style="display: none;">
+                <button class="btn btn-profile" id="profileBtn">
+                    <span class="profile-avatar" id="profileAvatar">U</span>
+                    <span class="profile-name" id="profileName">Kullanıcı</span>
+                    <svg class="dropdown-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <div class="dropdown-header">
+                        <span class="dropdown-email" id="dropdownEmail">kullanici@email.com</span>
+                        <span class="dropdown-role" id="dropdownRole">Üye</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <a href="#" class="dropdown-item" id="becomeWriterBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                            <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                            <path d="M2 2l7.586 7.586"></path>
+                            <circle cx="11" cy="11" r="2"></circle>
+                        </svg>
+                        Yazar Ol (Başvuru Yap)
+                    </a>
+                    <a href="#" class="dropdown-item" id="logoutBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Çıkış Yap
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Kategori Filtreleme Barı -->
+    <section class="categories-section">
+        <div class="categories-container">
+            <button class="category-btn active" data-category="all">Tümü</button>
+            <button class="category-btn" data-category="fizik">Fizik</button>
+            <button class="category-btn" data-category="cevre">Çevre ve Dünya</button>
+            <button class="category-btn" data-category="teknoloji">Teknoloji</button>
+            <button class="category-btn" data-category="uzay">Uzay</button>
+            <button class="category-btn" data-category="girisimcilik">Girişimcilik</button>
+            <button class="category-btn" data-category="tip">Tıp ve Sağlık</button>
+            <button class="category-btn" data-category="sosyal">Sosyal Bilimler</button>
+        </div>
+    </section>
+
+    <!-- Ana Haber Grid -->
+    <main class="news-section">
+        <div class="news-container">
+            <h2 class="section-title">Son Haberler</h2>
+            <div class="news-grid">
+                <!-- Haber Kartı 1 -->
+                <article class="news-card">
+                    <div class="news-image">
+                        <img src="https://picsum.photos/seed/physics/400/250" alt="Fizik Haberi">
+                    </div>
+                    <div class="news-content">
+                        <span class="news-category">Fizik</span>
+                        <h3 class="news-title">Kuantum Bilgisayarlar Yeni Bir Keşifle Önem Kazandı</h3>
+                        <p class="news-excerpt">Araştırmacılar, kuantum hesaplama alanında çığır açan bir gelişmeye imza attı.</p>
+                        <div class="news-meta">
+                            <span class="news-date">15 Haziran 2024</span>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- Haber Kartı 2 -->
+                <article class="news-card">
+                    <div class="news-image">
+                        <img src="https://picsum.photos/seed/space/400/250" alt="Uzay Haberi">
+                    </div>
+                    <div class="news-content">
+                        <span class="news-category">Uzay</span>
+                        <h3 class="news-title">James Webb Teleskobu'ndan Çarpıcı Görüntüler</h3>
+                        <p class="news-excerpt">Evrenin en uzak köşelerinden gelen yeni görüntüler bilim dünyasını heyecanlandırdı.</p>
+                        <div class="news-meta">
+                            <span class="news-date">14 Haziran 2024</span>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- Haber Kartı 3 -->
+                <article class="news-card">
+                    <div class="news-image">
+                        <img src="https://picsum.photos/seed/tech/400/250" alt="Teknoloji Haberi">
+                    </div>
+                    <div class="news-content">
+                        <span class="news-category">Teknoloji</span>
+                        <h3 class="news-title">Yapay Zeka Destekli Yeni Nesil Robotlar Tanıtıldı</h3>
+                        <p class="news-excerpt">Günlük hayatta kullanılmak üzere geliştirilen robotlar büyük ilgi gördü.</p>
+                        <div class="news-meta">
+                            <span class="news-date">13 Haziran 2024</span>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- Haber Kartı 4 -->
+                <article class="news-card">
+                    <div class="news-image">
+                        <img src="https://picsum.photos/seed/health/400/250" alt="Sağlık Haberi">
+                    </div>
+                    <div class="news-content">
+                        <span class="news-category">Tıp ve Sağlık</span>
+                        <h3 class="news-title">Kanser Tedavisinde Yeni Bir Yöntem Geliştirildi</h3>
+                        <p class="news-excerpt">Bilim insanları, hedefe yönelik terapi yöntemiyle umut verdi.</p>
+                        <div class="news-meta">
+                            <span class="news-date">12 Haziran 2024</span>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </main>
+
+    <!-- Giriş Yap Modal -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal">
+            <button class="modal-close" id="closeLoginModal">&times;</button>
+            <div class="modal-header">
+                <h2>Giriş Yap</h2>
+                <p>BİFTEK'e hoş geldiniz</p>
+            </div>
+            <div class="modal-body">
+                <button class="btn btn-google" id="googleLoginBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Google ile Giriş Yap
+                </button>
+                <div class="divider">
+                    <span>veya</span>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">E-posta</label>
+                        <input type="email" id="loginEmail" placeholder="ornek@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Şifre</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Giriş Yap</button>
+                </form>
+                <p class="modal-footer-text">
+                    Hesabınız yok mu? <a href="#" id="showRegisterFromLogin">Kayıt Ol</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kayıt Ol Modal -->
+    <div class="modal-overlay" id="registerModal">
+        <div class="modal">
+            <button class="modal-close" id="closeRegisterModal">&times;</button>
+            <div class="modal-header">
+                <h2>Kayıt Ol</h2>
+                <p>BİFTEK ailesine katılın</p>
+            </div>
+            <div class="modal-body">
+                <button class="btn btn-google" id="googleRegisterBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Google ile Kayıt Ol
+                </button>
+                <div class="divider">
+                    <span>veya</span>
+                </div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="registerName">Ad Soyad</label>
+                        <input type="text" id="registerName" placeholder="Adınız Soyadınız" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">E-posta</label>
+                        <input type="email" id="registerEmail" placeholder="ornek@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Şifre</label>
+                        <input type="password" id="registerPassword" placeholder="En az 6 karakter" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPasswordConfirm">Şifre Tekrar</label>
+                        <input type="password" id="registerPasswordConfirm" placeholder="Şifrenizi tekrar girin" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Kayıt Ol</button>
+                </form>
+                <p class="modal-footer-text">
+                    Zaten hesabınız var mı? <a href="#" id="showLoginFromRegister">Giriş Yap</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bildirim Toast -->
+    <div class="toast" id="toast">
+        <span class="toast-message" id="toastMessage"></span>
+    </div>
+
+    <!-- Yazar Başvuru Modal -->
+    <div class="modal-overlay" id="applicationModal">
+        <div class="modal modal-large">
+            <button class="modal-close" id="closeApplicationModal">&times;</button>
+            <div class="modal-header">
+                <h2>Yazar Olmak İster misin?</h2>
+                <p>BİFTEK ailesine katılmak için formu doldur</p>
+            </div>
+            <div class="modal-body">
+                <form id="applicationForm">
+                    <div class="form-group">
+                        <label for="appBio">Biyografi</label>
+                        <textarea id="appBio" rows="3" placeholder="Kendinizi kısaca tanıtın..." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="appExpertise">Uzmanlık Alanı</label>
+                        <select id="appExpertise" required>
+                            <option value="">Seçiniz...</option>
+                            <option value="fizik">Fizik</option>
+                            <option value="cevre">Çevre ve Dünya</option>
+                            <option value="teknoloji">Teknoloji</option>
+                            <option value="uzay">Uzay</option>
+                            <option value="girisimcilik">Girişimcilik</option>
+                            <option value="tip">Tıp ve Sağlık</option>
+                            <option value="sosyal">Sosyal Bilimler</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="appMotivation">Motivasyon Mektubu</label>
+                        <textarea id="appMotivation" rows="4" placeholder="Neden yazar olmak istiyorsunuz?" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="appPortfolio">Portfolyo / LinkedIn (Opsiyonel)</label>
+                        <input type="url" id="appPortfolio" placeholder="https://linkedin.com/in/ornk">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">Başvuruyu Gönder</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yönetici Paneli Modal -->
+    <div class="modal-overlay" id="adminPanelModal">
+        <div class="modal modal-xl">
+            <button class="modal-close" id="closeAdminPanelModal">&times;</button>
+            <div class="modal-header">
+                <h2>Yönetici Paneli - Başvurular</h2>
+                <p>Gelen yazar başvurularını inceleyin</p>
+            </div>
+            <div class="modal-body">
+                <div id="applicationsList" class="applications-list">
+                    <div class="loading-state">Yükleniyor...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Yazar Paneli (Editör) Modal - FAZ 4 -->
+    <div class="modal-overlay" id="writerPanelModal">
+        <div class="modal modal-full writer-editor-modal">
+            <button class="modal-close" id="closeWriterPanelModal">&times;</button>
+            <div class="editor-container">
+                <!-- Editör Header -->
+                <div class="editor-header">
+                    <div class="editor-title">
+                        <h2>Yeni Makale Oluştur</h2>
+                        <span class="save-status" id="saveStatus">Kaydedildi</span>
+                    </div>
+                    <div class="editor-actions">
+                        <button class="btn btn-outline" id="closeEditorBtn">Kapat</button>
+                        <button class="btn btn-primary" id="publishArticleBtn">Yayınla</button>
+                    </div>
+                </div>
+
+                <!-- Editör Body -->
+                <div class="editor-body">
+                    <!-- Sol Sidebar: Ayarlar ve Görsel -->
+                    <aside class="editor-sidebar">
+                        <div class="sidebar-section">
+                            <h3>Makale Bilgileri</h3>
+                            <div class="form-group">
+                                <label for="articleTitle">Makale Başlığı</label>
+                                <input type="text" id="articleTitle" placeholder="Çarpıcı bir başlık girin...">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="articleCategory">Kategori</label>
+                                <select id="articleCategory">
+                                    <option value="fizik">Fizik</option>
+                                    <option value="cevre">Çevre ve Dünya</option>
+                                    <option value="teknoloji">Teknoloji</option>
+                                    <option value="uzay">Uzay</option>
+                                    <option value="girisimcilik">Girişimcilik</option>
+                                    <option value="tip">Tıp ve Sağlık</option>
+                                    <option value="sosyal">Sosyal Bilimler</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="articleTags">Etiketler (Virgülle ayırın)</label>
+                                <input type="text" id="articleTags" placeholder="yapay zeka, mars, genetik...">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="articleSources">Kaynaklar (Her satıra bir URL)</label>
+                                <textarea id="articleSources" rows="3" placeholder="https://nasa.gov/haber1&#10;https://nature.com/makale2"></textarea>
+                            </div>
+                        </div>
+
+                        <hr class="sidebar-divider">
+
+                        <div class="sidebar-section">
+                            <h3>Kapak Görseli</h3>
+                            
+                            <!-- Sekmeli Görsel Seçici -->
+                            <div class="image-selector-tabs">
+                                <button class="tab-btn active" data-tab="upload">Yükle</button>
+                                <button class="tab-btn" data-tab="url">URL</button>
+                                <button class="tab-btn" data-tab="smart">Akıllı Öneri</button>
+                            </div>
+
+                            <!-- 1. Dosya Yükleme -->
+                            <div class="image-tab-content active" id="tab-upload">
+                                <div class="file-upload-area" id="fileUploadArea">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    <p>Dosyayı buraya sürükleyin veya tıklayın</p>
+                                    <span class="small-text">PNG, JPG max 5MB</span>
+                                </div>
+                                <input type="file" id="coverFileInput" accept="image/*" style="display:none">
+                                <div class="preview-container" id="filePreviewContainer" style="display:none">
+                                    <img id="filePreviewImg" src="" alt="Önizleme">
+                                    <button class="btn-remove-image" id="removeFilePreview">&times;</button>
+                                </div>
+                            </div>
+
+                            <!-- 2. URL Ekleme -->
+                            <div class="image-tab-content" id="tab-url">
+                                <div class="form-group">
+                                    <input type="url" id="coverUrlInput" placeholder="https://ornek.com/resim.jpg">
+                                </div>
+                                <div class="preview-container" id="urlPreviewContainer" style="display:none">
+                                    <img id="urlPreviewImg" src="" alt="Önizleme">
+                                    <button class="btn-remove-image" id="removeUrlPreview">&times;</button>
+                                </div>
+                            </div>
+
+                            <!-- 3. Akıllı Öneri (Unsplash/Pexels) -->
+                            <div class="image-tab-content" id="tab-smart">
+                                <p class="small-text" style="margin-bottom: 12px;">Kategori ve etiketlerinize göre önerilen görseller:</p>
+                                <button class="btn btn-sm btn-outline" id="fetchSmartImagesBtn">Görselleri Getir</button>
+                                <div class="smart-images-grid" id="smartImagesGrid">
+                                    <!-- JS ile doldurulacak -->
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="finalCoverImage" value="">
+                        </div>
+                    </aside>
+
+                    <!-- Sağ Ana Alan: Editör -->
+                    <main class="editor-main">
+                        <div class="editor-toolbar">
+                            <button class="toolbar-btn" onclick="formatDoc('bold')" title="Kalın">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/>
+                                    <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/>
+                                </svg>
+                            </button>
+                            <button class="toolbar-btn" onclick="formatDoc('italic')" title="İtalik">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="19" y1="4" x2="10" y2="4"/>
+                                    <line x1="14" y1="20" x2="5" y2="20"/>
+                                    <line x1="15" y1="4" x2="9" y2="20"/>
+                                </svg>
+                            </button>
+                            <button class="toolbar-btn" onclick="formatDoc('underline')" title="Altı Çizili">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/>
+                                    <line x1="4" y1="21" x2="20" y2="21"/>
+                                </svg>
+                            </button>
+                            <button class="toolbar-btn" onclick="formatDoc('formatBlock','H2')" title="Başlık 2">
+                                <span style="font-weight:bold">H2</span>
+                            </button>
+                            <button class="toolbar-btn" onclick="formatDoc('insertUnorderedList')" title="Liste">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="8" y1="6" x2="21" y2="6"/>
+                                    <line x1="8" y1="12" x2="21" y2="12"/>
+                                    <line x1="8" y1="18" x2="21" y2="18"/>
+                                    <circle cx="4" cy="6" r="1" fill="currentColor"/>
+                                    <circle cx="4" cy="12" r="1" fill="currentColor"/>
+                                    <circle cx="4" cy="18" r="1" fill="currentColor"/>
+                                </svg>
+                            </button>
+                            <div class="toolbar-divider"></div>
+                            <button class="toolbar-btn" onclick="document.getElementById('mdFileInput').click()" title="MD/HTML Dosyası Yükle">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="12" y1="18" x2="12" y2="12"/>
+                                    <line x1="9" y1="15" x2="15" y2="15"/>
+                                </svg>
+                            </button>
+                            <input type="file" id="mdFileInput" accept=".md,.html,.txt" style="display:none" onchange="loadFileContent(this)">
+                        </div>
+                        
+                        <div class="editor-content-wrapper">
+                            <textarea id="articleContent" class="editor-textarea" placeholder="Buraya yazmaya başlayın...&#10;&#10;Markdown formatını destekler:&#10;# Başlık 1&#10;## Başlık 2&#10;**kalın** *italik*&#10;- Liste öğesi"></textarea>
+                        </div>
+                        
+                        <div class="editor-stats">
+                            <div class="stat-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                    <line x1="6" y1="8" x2="18" y2="8"/>
+                                    <line x1="6" y1="12" x2="14" y2="12"/>
+                                </svg>
+                                <span><b id="wordCount">0</b> Kelime</span>
+                            </div>
+                            <div class="stat-item">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <span>Tahmini Okuma: <b id="readTime">0</b> dk</span>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            </div>
+            
+            <!-- Konu Asistanı Chatbot -->
+            <div class="topic-assistant" id="topicAssistant">
+                <div class="assistant-toggle" id="assistantToggle">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>Konu Asistanı</span>
+                </div>
+                <div class="assistant-panel" id="assistantPanel" style="display: none;">
+                    <div class="assistant-header">
+                        <h4>Konu Asistanı</h4>
+                        <button class="assistant-close" id="assistantClose">&times;</button>
+                    </div>
+                    <div class="assistant-messages" id="assistantMessages">
+                        <div class="assistant-message bot">
+                            Merhaba! Sana daha önce yazılmamış konu önerileri sunabilirim. Ne tür konular ilgini çekiyor?
+                        </div>
+                    </div>
+                    <div class="assistant-input-area">
+                        <input type="text" id="assistantInput" placeholder="Konu önerisi al...">
+                        <button id="assistantSendBtn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Haber Detay Sayfası Modal - FAZ 5 -->
+    <div class="modal-overlay" id="articleDetailModal">
+        <div class="modal modal-full article-detail-modal">
+            <button class="modal-close" id="closeArticleDetailModal">&times;</button>
+            <article class="article-content-wrapper">
+                <header class="article-header">
+                    <span class="article-category-badge" id="detailCategory">Kategori</span>
+                    <h1 class="article-title" id="detailTitle">Başlık</h1>
+                    <div class="article-meta">
+                        <span class="author-name" id="detailAuthor">Yazar</span>
+                        <span class="article-date" id="detailDate">Tarih</span>
+                        <span class="read-time" id="detailReadTime">Okuma süresi</span>
+                    </div>
+                    <div class="article-actions">
+                        <button class="action-btn like-btn" id="likeBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                            </svg>
+                            <span id="likeCount">0</span>
+                        </button>
+                        <button class="action-btn bookmark-btn" id="bookmarkBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </header>
+                
+                <div class="article-cover-image">
+                    <img id="detailCoverImage" src="" alt="Kapak görseli">
+                </div>
+                
+                <div class="article-body" id="detailContent">
+                    <!-- İçerik buraya gelecek -->
+                </div>
+                
+                <div class="article-sources" id="articleSourcesSection" style="display: none;">
+                    <h3>Kaynaklar</h3>
+                    <ul class="sources-list" id="sourcesList">
+                        <!-- Kaynaklar buraya gelecek -->
+                    </ul>
+                </div>
+                
+                <div class="article-share">
+                    <h3>Paylaş</h3>
+                    <div class="share-buttons">
+                        <button class="share-btn twitter" id="shareTwitter">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                            </svg>
+                        </button>
+                        <button class="share-btn whatsapp" id="shareWhatsApp">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                            </svg>
+                        </button>
+                        <button class="share-btn linkedin" id="shareLinkedIn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                            </svg>
+                        </button>
+                        <button class="share-btn copy-link" id="copyLinkBtn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                            </svg>
+                            Bağlantıyı Kopyala
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="article-tts">
+                    <button class="tts-btn" id="ttsBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                        </svg>
+                        <span id="ttsText">Metni Sesli Oku</span>
+                    </button>
+                </div>
+                
+                <div class="feedback-section">
+                    <h3>Geri Bildirim</h3>
+                    <form id="feedbackForm">
+                        <div class="form-group">
+                            <input type="text" id="feedbackName" placeholder="Adınız (Opsiyonel)" maxlength="50">
+                        </div>
+                        <div class="form-group">
+                            <textarea id="feedbackMessage" rows="3" placeholder="Düşüncelerinizi paylaşın..." required maxlength="500"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Gönder</button>
+                    </form>
+                </div>
+            </article>
+        </div>
+    </div>
+
+    <!-- Mola Alanı - Retro Oyunlar Modal - FAZ 8 -->
+    <div class="modal-overlay" id="breakRoomModal">
+        <div class="modal modal-large break-room-modal">
+            <button class="modal-close" id="closeBreakRoomModal">&times;</button>
+            <div class="modal-header">
+                <h2>🎮 BİFTEK Retro Laboratuvarı</h2>
+                <p>Bilim molası! Hangi oyunu oynamak istersin?</p>
+            </div>
+            <div class="modal-body">
+                <div class="game-selection">
+                    <div class="game-card" data-game="snake">
+                        <div class="game-icon">🐍</div>
+                        <h3>Atom Snake</h3>
+                        <p>Atomları toplayarak büyü!</p>
+                        <button class="btn btn-primary play-snake-btn">Oyna</button>
+                    </div>
+                    <div class="game-card" data-game="invaders">
+                        <div class="game-icon">👾</div>
+                        <h3>Uzay Savunma</h3>
+                        <p>Asteroidleri vur, dünyayı kurtar!</p>
+                        <button class="btn btn-primary play-invaders-btn">Oyna</button>
+                    </div>
+                </div>
+                
+                <!-- Snake Oyun Alanı -->
+                <div class="game-container" id="snakeGameContainer" style="display: none;">
+                    <canvas id="snakeCanvas" width="400" height="400"></canvas>
+                    <div class="game-controls">
+                        <p>Skor: <span id="snakeScore">0</span></p>
+                        <button class="btn btn-outline" id="stopSnakeBtn">Durdur</button>
+                    </div>
+                </div>
+                
+                <!-- Space Invaders Oyun Alanı -->
+                <div class="game-container" id="invadersGameContainer" style="display: none;">
+                    <canvas id="invadersCanvas" width="400" height="500"></canvas>
+                    <div class="game-controls">
+                        <p>Skor: <span id="invadersScore">0</span></p>
+                        <button class="btn btn-outline" id="stopInvadersBtn">Durdur</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 404 Sayfası - Gizli Platform Oyunu - FAZ 8 -->
+    <div class="modal-overlay" id="page404Modal" style="display: none;">
+        <div class="modal modal-full page404-modal">
+            <div class="page404-content">
+                <h1>404</h1>
+                <h2>Sayfa Bulunamadı!</h2>
+                <p>Ama merak etme, bu gizli bir oyun alanı!</p>
+                <div class="platform-game-container">
+                    <canvas id="platformCanvas" width="800" height="400"></canvas>
+                    <div class="game-instructions">
+                        <p>← → Yön tuşları ile hareket et, SPACE ile zıpla</p>
+                        <button class="btn btn-primary" id="startPlatformGame">Oyunu Başlat</button>
+                        <button class="btn btn-outline" id="goHome404">Ana Sayfaya Dön</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    
+    <!-- PWA Service Worker Kaydı -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker başarıyla kaydedildi:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('Service Worker kayıt hatası:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
