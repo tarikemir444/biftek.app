@@ -1,670 +1,1184 @@
-// BİFTEK - Bilim, Fen ve Teknoloji Kulübü Haber Sitesi
-// Faz 2: Firebase Authentication ve Firestore Entegrasyonu
+/**
+ * BİFTEK - Bilim, Fen ve Teknoloji Kulübü Haber Sitesi
+ * FAZ 1-8 TAM SÜRÜM (Hatasız, Temizlenmiş, Firebase Entegreli)
+ * 
+ * KURULUM:
+ * Bu dosya doğrudan Firebase v10+ Modular SDK kullanır.
+ * Lütfen index.html ile birlikte bir web sunucusu (Live Server, Vercel, Netlify) üzerinde çalıştırın.
+ */
 
-// ============================================
-// FIREBASE CONFIGURATION
-// ============================================
-// NOT: Bu bilgileri kendi Firebase projenizden almalısınız.
-// Firebase Console > Project Settings > General > Your apps > SDK setup and configuration
+// --- FIREBASE SDK IMPORTS (Modular v10+) ---
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { 
+    getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, 
+    signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, 
+    sendEmailVerification 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { 
+    getFirestore, collection, addDoc, getDocs, doc, updateDoc, 
+    query, where, serverTimestamp, orderBy, limit, deleteDoc, getDoc, setDoc 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// ==========================================
+// ⚙️ 1. FIREBASE YAPILANDIRMASI
+// ==========================================
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCzZfidhz7rcyTNu_oPuvDARaUDiifDA6c",
+    authDomain: "biftek-app.firebaseapp.com",
+    projectId: "biftek-app",
+    storageBucket: "biftek-app.firebasestorage.app",
+    messagingSenderId: "107523968872",
+    appId: "1:107523968872:web:a8ca9af8b147050c1e50dd",
+    measurementId: "G-4L56GFRJBF"
 };
 
-// Firebase'i başlat
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+// Firebase Başlatma ve Hata Yakalama
+let auth, db;
+try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    console.log("✅ Firebase başarıyla başlatıldı.");
+} catch (error) {
+    console.error("❌ Firebase başlatma hatası:", error);
+    alert("HATA: Firebase bağlantısı kurulamadı. Konsolu kontrol edin.");
+}
 
-// ============================================
-// GLOBAL DEĞİŞKENLER
-// ============================================
+const provider = new GoogleAuthProvider();
+
+// ==========================================
+// 🌍 2. GLOBAL DEĞİŞKENLER VE DURUM
+// ==========================================
 let currentUser = null;
+let currentArticleId = null;
+let gameAnimationFrame = null;
+let activeGame = null;
+let currentGameInstance = null;
 
-// ============================================
-// SAYFA YÜKLENDİĞİNDE
-// ============================================
-document.addEventListener('DOMContentLoaded', function() {
-    
-    // Auth state değişikliklerini dinle
-    auth.onAuthStateChanged(user => {
-        if (user) {
-            currentUser = user;
-            updateUIForLoggedInUser(user);
+// DOM Elementleri
+const elements = {
+    toast: document.getElementById('toast'),
+    toastMsg: document.getElementById('toast-msg'),
+    newsGrid: document.getElementById('news-grid'),
+    views: {
+        home: document.getElementById('home-view'),
+        article: document.getElementById('article-view'),
+        writer: document.getElementById('writer-panel'),
+        admin: document.getElementById('admin-panel')
+    },
+    authButtons: document.getElementById('auth-buttons'),
+    userMenu: document.getElementById('user-menu'),
+    profileDropdown: document.getElementById('profile-dropdown'),
+    chatbotWindow: document.getElementById('chatbot-window'),
+    gameCanvas: document.getElementById('game-canvas')
+};
+
+// ==========================================
+// 🎨 3. ARAYÜZ YARDIMCILARI (UI HELPERS)
+// ==========================================
+const UI = {
+    showToast: (message) => {
+        if (!elements.toast) return;
+        elements.toastMsg.textContent = message;
+        elements.toast.classList.add('show');
+        setTimeout(() => elements.toast.classList.remove('show'), 3000);
+    },
+
+    showSection: (sectionId) => {
+        // Tüm ana bölümleri gizle
+        Object.values(elements.views).forEach(el => {
+            if (el) {
+                el.classList.remove('active');
+                setTimeout(() => {
+                    if (!el.classList.contains('active')) el.style.display = 'none';
+                }, 400);
+            }
+        });
+
+        // İstenen bölümü göster
+        const target = elements.views[sectionId] || document.getElementById(sectionId);
+        if (target) {
+            target.style.display = 'block';
+            setTimeout(() => target.classList.add('active'), 50);
+            window.scrollTo(0, 0);
+        }
+    },
+
+    toggleModal: (modalId, show) => {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        if (show) {
+            modal.style.display = 'flex';
+            setTimeout(() => modal.classList.add('active'), 10);
         } else {
-            currentUser = null;
-            updateUIForLoggedOutUser();
+            modal.classList.remove('active');
+            setTimeout(() => modal.style.display = 'none', 300);
         }
-    });
+    },
 
-    // Modal Elementleri
-    const loginModal = document.getElementById('loginModal');
-    const registerModal = document.getElementById('registerModal');
-    const guestButtons = document.getElementById('guestButtons');
-    const profileMenu = document.getElementById('profileMenu');
-    const profileBtn = document.getElementById('profileBtn');
-    const profileDropdown = document.getElementById('profileDropdown');
-
-    // ============================================
-    // MODAL AÇMA/KAPAMA FONKSİYONLARI
-    // ============================================
-    function openLoginModal() {
-        loginModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
+    closeAllModals: () => {
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            UI.toggleModal(modal.id, false);
+        });
     }
+};
 
-    function closeLoginModal() {
-        loginModal.classList.remove('active');
-        document.body.style.overflow = '';
-    }
+// ==========================================
+// 🔐 4. KİMLİK DOĞRULAMA (AUTH)
+// ==========================================
+const Auth = {
+    init: () => {
+        onAuthStateChanged(auth, async (user) => {
+            currentUser = user;
+            Auth.updateInterface();
+            if (user) await Auth.checkUserRole(user.uid);
+        });
 
-    function openRegisterModal() {
-        registerModal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-
-    function closeRegisterModal() {
-        registerModal.classList.remove('active');
-        document.body.style.overflow = '';
-    }
-
-    // Giriş Yap butonu
-    const loginBtn = document.querySelector('.btn-login');
-    loginBtn.addEventListener('click', openLoginModal);
-
-    // Kayıt Ol butonu
-    const registerBtn = document.querySelector('.btn-register');
-    registerBtn.addEventListener('click', openRegisterModal);
-
-    // Modal kapatma butonları
-    document.getElementById('closeLoginModal').addEventListener('click', closeLoginModal);
-    document.getElementById('closeRegisterModal').addEventListener('click', closeRegisterModal);
-
-    // Modal dışına tıklayınca kapat
-    loginModal.addEventListener('click', function(e) {
-        if (e.target === loginModal) {
-            closeLoginModal();
+        // Buton Event Listener'ları
+        const loginBtn = document.getElementById('login-btn');
+        const signupBtn = document.getElementById('signup-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const profileBtn = document.getElementById('profile-btn');
+        
+        if(loginBtn) loginBtn.addEventListener('click', () => UI.toggleModal('login-modal', true));
+        if(signupBtn) signupBtn.addEventListener('click', () => UI.toggleModal('signup-modal', true));
+        if(logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth));
+        
+        if(profileBtn) {
+            profileBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const dd = elements.profileDropdown;
+                dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+            });
         }
-    });
+        
+        document.addEventListener('click', (e) => {
+            if (elements.profileDropdown && 
+                !elements.profileDropdown.contains(e.target) && 
+                e.target.id !== 'profile-btn') {
+                elements.profileDropdown.style.display = 'none';
+            }
+        });
 
-    registerModal.addEventListener('click', function(e) {
-        if (e.target === registerModal) {
-            closeRegisterModal();
+        // Modal Aksiyonları
+        const confirmLogin = document.getElementById('confirm-login');
+        const confirmSignup = document.getElementById('confirm-signup');
+        const googleLogin = document.getElementById('google-login');
+        const becomeWriterBtn = document.getElementById('become-writer-btn');
+        const submitAppBtn = document.getElementById('submit-app');
+        const adminPanelBtn = document.getElementById('admin-panel-btn');
+        const verifyAdminCodeBtn = document.getElementById('verify-admin-code');
+        const writerPanelBtn = document.getElementById('writer-panel-btn');
+        const gamesBtn = document.getElementById('games-btn');
+
+        if(confirmLogin) confirmLogin.addEventListener('click', Auth.login);
+        if(confirmSignup) confirmSignup.addEventListener('click', Auth.signup);
+        if(googleLogin) googleLogin.addEventListener('click', () => signInWithPopup(auth, provider));
+        
+        if(becomeWriterBtn) {
+            becomeWriterBtn.addEventListener('click', () => {
+                UI.toggleModal('writer-app-modal', true);
+                if(elements.profileDropdown) elements.profileDropdown.style.display = 'none';
+            });
         }
-    });
+        if(submitAppBtn) submitAppBtn.addEventListener('click', Auth.submitApplication);
 
-    // Login modalından kayıt modalına geçiş
-    document.getElementById('showRegisterFromLogin').addEventListener('click', function(e) {
-        e.preventDefault();
-        closeLoginModal();
-        setTimeout(openRegisterModal, 300);
-    });
-
-    // Register modalından login modalına geçiş
-    document.getElementById('showLoginFromRegister').addEventListener('click', function(e) {
-        e.preventDefault();
-        closeRegisterModal();
-        setTimeout(openLoginModal, 300);
-    });
-
-    // ============================================
-    // PROFİL MENÜSÜ
-    // ============================================
-    profileBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        profileBtn.classList.toggle('active');
-        profileDropdown.classList.toggle('active');
-    });
-
-    // Profil menüsü dışına tıklayınca kapat
-    document.addEventListener('click', function(e) {
-        if (!profileMenu.contains(e.target)) {
-            profileBtn.classList.remove('active');
-            profileDropdown.classList.remove('active');
+        if(adminPanelBtn) {
+            adminPanelBtn.addEventListener('click', () => {
+                UI.toggleModal('admin-code-modal', true);
+                if(elements.profileDropdown) elements.profileDropdown.style.display = 'none';
+            });
         }
-    });
+        if(verifyAdminCodeBtn) verifyAdminCodeBtn.addEventListener('click', Auth.verifyAdminCode);
 
-    // Çıkış Yap butonu
-    document.getElementById('logoutBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        logout();
-    });
+        if(writerPanelBtn) {
+            writerPanelBtn.addEventListener('click', () => {
+                UI.showSection('writer');
+                if(elements.profileDropdown) elements.profileDropdown.style.display = 'none';
+                WriterPanel.init();
+            });
+        }
 
-    // Yazar Ol butonu
-    document.getElementById('becomeWriterBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        showToast('Yazar başvuru formu yakında eklenecek!', 'info');
-    });
+        if(gamesBtn) {
+            gamesBtn.addEventListener('click', () => {
+                UI.toggleModal('games-modal', true);
+                if(elements.profileDropdown) elements.profileDropdown.style.display = 'none';
+            });
+        }
+    },
 
-    // ============================================
-    // GİRİŞ YAPMA FORMU
-    // ============================================
-    const loginForm = document.getElementById('loginForm');
-    loginForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
+    login: async () => {
+        const email = document.getElementById('login-email').value;
+        const pass = document.getElementById('login-pass').value;
+        if (!email || !pass) return UI.showToast("Lütfen e-posta ve şifreyi girin.");
+        
+        try {
+            await signInWithEmailAndPassword(auth, email, pass);
+            UI.closeAllModals();
+            UI.showToast("Hoş geldiniz!");
+        } catch (error) {
+            let msg = "Giriş Hatası";
+            if(error.code === 'auth/wrong-password') msg = "Hatalı şifre.";
+            if(error.code === 'auth/user-not-found') msg = "Kullanıcı bulunamadı.";
+            if(error.code === 'auth/invalid-email') msg = "Geçersiz e-posta.";
+            UI.showToast(msg + " (" + error.code + ")");
+        }
+    },
 
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-        const submitBtn = loginForm.querySelector('button[type="submit"]');
+    signup: async () => {
+        const name = document.getElementById('signup-name').value;
+        const email = document.getElementById('signup-email').value;
+        const pass = document.getElementById('signup-pass').value;
+        if (!name || !email || !pass) return UI.showToast("Tüm alanlar zorunludur.");
 
         try {
-            // Loading状态
-            submitBtn.classList.add('btn-loading');
-            
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            const user = userCredential.user;
+            const cred = await createUserWithEmailAndPassword(auth, email, pass);
+            await setDoc(doc(db, "users", cred.user.uid), {
+                displayName: name,
+                email: email,
+                role: 'user',
+                createdAt: serverTimestamp()
+            });
+            await sendEmailVerification(cred.user);
+            UI.closeAllModals();
+            UI.showToast("Kayıt başarılı! Lütfen e-postanızı doğrulayın.");
+        } catch (error) {
+            let msg = "Kayıt Hatası";
+            if(error.code === 'auth/email-already-in-use') msg = "Bu e-posta zaten kullanılıyor.";
+            if(error.code === 'auth/weak-password') msg = "Şifre çok zayıf (en az 6 karakter).";
+            UI.showToast(msg + " (" + error.code + ")");
+        }
+    },
 
-            // E-posta doğrulama kontrolü
-            if (!user.emailVerified) {
-                showToast('Lütfen e-posta adresinizi doğrulayın.', 'error');
-                await auth.signOut();
-                closeLoginModal();
+    updateInterface: () => {
+        if (currentUser) {
+            if(elements.authButtons) elements.authButtons.style.display = 'none';
+            if(elements.userMenu) elements.userMenu.style.display = 'block';
+        } else {
+            if(elements.authButtons) elements.authButtons.style.display = 'flex';
+            if(elements.userMenu) elements.userMenu.style.display = 'none';
+            if(elements.profileDropdown) elements.profileDropdown.style.display = 'none';
+            
+            const wpBtn = document.getElementById('writer-panel-btn');
+            const apBtn = document.getElementById('admin-panel-btn');
+            if(wpBtn) wpBtn.style.display = 'none';
+            if(apBtn) apBtn.style.display = 'none';
+        }
+    },
+
+    checkUserRole: async (uid) => {
+        try {
+            const userDoc = await getDoc(doc(db, "users", uid));
+            let role = 'user';
+            
+            if (userDoc.exists()) {
+                role = userDoc.data().role || 'user';
+                const roleDisplay = document.getElementById('user-role-display');
+                if(roleDisplay) roleDisplay.textContent = "Rol: " + role.toUpperCase();
+            }
+
+            if (role === 'author' || role === 'admin') {
+                const wpBtn = document.getElementById('writer-panel-btn');
+                if(wpBtn) wpBtn.style.display = 'flex';
+            }
+            if (role === 'admin') {
+                const apBtn = document.getElementById('admin-panel-btn');
+                if(apBtn) apBtn.style.display = 'flex';
+                
+                apBtn.onclick = () => {
+                    UI.showSection('admin');
+                    AdminPanel.load();
+                    if(elements.profileDropdown) elements.profileDropdown.style.display = 'none';
+                };
+            }
+        } catch (error) {
+            console.error("Rol kontrol hatası:", error);
+        }
+    },
+
+    submitApplication: async () => {
+        const bio = document.getElementById('app-bio').value;
+        const expertise = document.getElementById('app-expertise').value;
+        const motivation = document.getElementById('app-motivation').value;
+        const portfolio = document.getElementById('app-portfolio').value;
+
+        if (!bio || !motivation) return UI.showToast("Biyografi ve motivasyon zorunludur.");
+
+        try {
+            await addDoc(collection(db, "applications"), {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                displayName: currentUser.displayName || "Kullanıcı",
+                bio, expertise, motivation, portfolio,
+                status: 'pending',
+                appliedAt: serverTimestamp()
+            });
+            UI.closeAllModals();
+            UI.showToast("Başvurunuz alındı!");
+        } catch (error) {
+            UI.showToast("Hata: " + error.message);
+        }
+    },
+
+    verifyAdminCode: async () => {
+        const code = document.getElementById('admin-code-input').value;
+        if (code === "BIFTEK-ADMIN-2024") {
+            try {
+                await updateDoc(doc(db, "users", currentUser.uid), { role: 'admin' });
+                UI.closeAllModals();
+                UI.showToast("Tebrikler! Yönetici yetkisi verildi.");
+                setTimeout(() => location.reload(), 1500);
+            } catch (error) {
+                UI.showToast("Yetki güncellenemedi: " + error.message);
+            }
+        } else {
+            UI.showToast("Hatalı yönetici kodu!");
+        }
+    }
+};
+
+// ==========================================
+// 📰 5. HABER AKIŞI
+// ==========================================
+const NewsFeed = {
+    init: () => {
+        NewsFeed.load('all');
+        document.querySelectorAll('.cat-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                document.querySelectorAll('.cat-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                NewsFeed.load(pill.dataset.cat);
+            });
+        });
+    },
+
+    load: async (category) => {
+        if (!elements.newsGrid) return;
+        elements.newsGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--text-secondary);"><span class="material-icons-round" style="font-size:48px; opacity:0.5; margin-bottom:10px;">hourglass_empty</span><p>Haberler yükleniyor...</p></div>';
+        
+        try {
+            let q;
+            if (category === 'all') {
+                q = query(collection(db, "articles"), orderBy("createdAt", "desc"), limit(50));
+            } else {
+                q = query(collection(db, "articles"), where("category", "==", category), orderBy("createdAt", "desc"), limit(50));
+            }
+
+            const snapshot = await getDocs(q);
+            elements.newsGrid.innerHTML = '';
+            
+            if (snapshot.empty) {
+                elements.newsGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-secondary); padding:40px;">Bu kategoride henüz haber yok.</div>';
                 return;
             }
 
-            showToast('Giriş başarılı! Hoş geldiniz.', 'success');
-            closeLoginModal();
-            loginForm.reset();
-        } catch (error) {
-            console.error('Giriş hatası:', error);
-            let errorMessage = 'Giriş yapılırken bir hata oluştu.';
-            
-            switch(error.code) {
-                case 'auth/user-not-found':
-                    errorMessage = 'Bu e-posta ile kayıtlı kullanıcı bulunamadı.';
-                    break;
-                case 'auth/wrong-password':
-                    errorMessage = 'Hatalı şifre.';
-                    break;
-                case 'auth/invalid-email':
-                    errorMessage = 'Geçersiz e-posta adresi.';
-                    break;
-                case 'auth/user-disabled':
-                    errorMessage = 'Bu hesap devre dışı bırakılmış.';
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage = 'Çok fazla deneme. Lütfen daha sonra tekrar deneyin.';
-                    break;
-            }
-            
-            showToast(errorMessage, 'error');
-        } finally {
-            submitBtn.classList.remove('btn-loading');
-        }
-    });
-
-    // ============================================
-    // KAYIT OLMA FORMU
-    // ============================================
-    const registerForm = document.getElementById('registerForm');
-    registerForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const name = document.getElementById('registerName').value;
-        const email = document.getElementById('registerEmail').value;
-        const password = document.getElementById('registerPassword').value;
-        const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
-        const submitBtn = registerForm.querySelector('button[type="submit"]');
-
-        // Şifre eşleşme kontrolü
-        if (password !== passwordConfirm) {
-            showToast('Şifreler eşleşmiyor!', 'error');
-            return;
-        }
-
-        // Şifre uzunluk kontrolü
-        if (password.length < 6) {
-            showToast('Şifre en az 6 karakter olmalıdır.', 'error');
-            return;
-        }
-
-        try {
-            submitBtn.classList.add('btn-loading');
-            
-            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-            const user = userCredential.user;
-
-            // Kullanıcı bilgilerini Firestore'a kaydet
-            await db.collection('users').doc(user.uid).set({
-                uid: user.uid,
-                displayName: name,
-                email: email,
-                role: 'member', // member, writer, admin
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                isWriterRequest: false
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const card = document.createElement('div');
+                card.className = 'news-card';
+                const coverUrl = data.cover && data.cover.trim() !== '' ? data.cover : `https://picsum.photos/seed/${docSnap.id}/400/200`;
+                
+                card.innerHTML = `
+                    <img src="${coverUrl}" class="card-img" alt="Cover" loading="lazy" onerror="this.src='https://via.placeholder.com/400x200?text=BIFTEK'">
+                    <div class="card-body">
+                        <div class="card-cat">${data.category}</div>
+                        <div class="card-title">${data.title}</div>
+                        <div class="card-excerpt">${data.excerpt || (data.content ? data.content.substring(0, 100) + '...' : 'Detaylar için tıklayın.')}</div>
+                        <div class="card-meta">
+                            <span>${data.authorName || 'BİFTEK'}</span>
+                            <span>${data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('tr-TR') : ''}</span>
+                        </div>
+                    </div>
+                `;
+                card.addEventListener('click', () => ArticleDetail.open(docSnap.id, data));
+                elements.newsGrid.appendChild(card);
             });
-
-            // E-posta doğrulama maili gönder
-            await user.sendEmailVerification();
-
-            showToast('Kayıt başarılı! Lütfen e-postanızı kontrol edin ve hesabınızı doğrulayın.', 'success');
-            closeRegisterModal();
-            registerForm.reset();
         } catch (error) {
-            console.error('Kayıt hatası:', error);
-            let errorMessage = 'Kayıt olurken bir hata oluştu.';
-            
-            switch(error.code) {
-                case 'auth/email-already-in-use':
-                    errorMessage = 'Bu e-posta zaten kullanılıyor.';
-                    break;
-                case 'auth/invalid-email':
-                    errorMessage = 'Geçersiz e-posta adresi.';
-                    break;
-                case 'auth/weak-password':
-                    errorMessage = 'Şifre çok zayıf. En az 6 karakter kullanın.';
-                    break;
-                case 'auth/operation-not-allowed':
-                    errorMessage = 'E-posta/şifre ile kayıt devre dışı.';
-                    break;
-            }
-            
-            showToast(errorMessage, 'error');
-        } finally {
-            submitBtn.classList.remove('btn-loading');
+            console.error("Haber yükleme hatası:", error);
+            elements.newsGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--danger); padding:40px;">Haberler yüklenirken hata oluştu.<br><small>' + error.message + '</small></div>';
         }
-    });
+    }
+};
 
-    // ============================================
-    // GOOGLE İLE GİRİŞ
-    // ============================================
-    const googleLoginBtn = document.getElementById('googleLoginBtn');
-    googleLoginBtn.addEventListener('click', async function() {
-        const provider = new firebase.auth.GoogleAuthProvider();
+// ==========================================
+// 📄 6. MAKALE DETAYI
+// ==========================================
+const ArticleDetail = {
+    open: (id, data) => {
+        currentArticleId = id;
+        UI.showSection('article');
         
-        try {
-            const result = await auth.signInWithPopup(provider);
-            const user = result.user;
+        const titleEl = document.getElementById('detail-title');
+        const metaEl = document.getElementById('detail-meta');
+        const coverEl = document.getElementById('detail-cover');
+        const contentEl = document.getElementById('detail-content');
+        const sourcesSection = document.getElementById('sources-section');
+        const sourcesList = document.getElementById('sources-list');
 
-            // Yeni kullanıcıysa Firestore'a kaydet
-            const userDoc = await db.collection('users').doc(user.uid).get();
-            if (!userDoc.exists) {
-                await db.collection('users').doc(user.uid).set({
-                    uid: user.uid,
-                    displayName: user.displayName,
-                    email: user.email,
-                    photoURL: user.photoURL,
-                    role: 'member',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    isWriterRequest: false
-                });
-            }
+        if(!titleEl || !metaEl || !contentEl) return;
 
-            showToast('Google ile giriş başarılı!', 'success');
-            closeLoginModal();
-        } catch (error) {
-            console.error('Google giriş hatası:', error);
-            let errorMessage = 'Google ile giriş yapılırken bir hata oluştu.';
-            
-            if (error.code === 'auth/popup-closed-by-user') {
-                errorMessage = 'Giriş penceresi kapatıldı.';
-            } else if (error.code === 'auth/account-exists-with-different-credential') {
-                errorMessage = 'Bu e-posta farklı bir yöntemle zaten kayıtlı.';
-            }
-            
-            showToast(errorMessage, 'error');
-        }
-    });
-
-    // ============================================
-    // GOOGLE İLE KAYIT
-    // ============================================
-    const googleRegisterBtn = document.getElementById('googleRegisterBtn');
-    googleRegisterBtn.addEventListener('click', async function() {
-        const provider = new firebase.auth.GoogleAuthProvider();
+        titleEl.textContent = data.title || 'Başlıksız Makale';
+        metaEl.innerHTML = `
+            <span><span class="material-icons-round" style="font-size:14px; vertical-align:middle;">person</span> ${data.authorName || 'Anonim'}</span>
+            <span><span class="material-icons-round" style="font-size:14px; vertical-align:middle;">calendar_today</span> ${data.createdAt ? new Date(data.createdAt.seconds * 1000).toLocaleDateString('tr-TR') : ''}</span>
+            <span><span class="material-icons-round" style="font-size:14px; vertical-align:middle;">category</span> ${data.category}</span>
+        `;
         
-        try {
-            const result = await auth.signInWithPopup(provider);
-            const user = result.user;
-
-            // Kullanıcı bilgilerini Firestore'a kaydet
-            await db.collection('users').doc(user.uid).set({
-                uid: user.uid,
-                displayName: user.displayName,
-                email: user.email,
-                photoURL: user.photoURL,
-                role: 'member',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                isWriterRequest: false
-            }, { merge: true });
-
-            showToast('Google ile kayıt başarılı!', 'success');
-            closeRegisterModal();
-        } catch (error) {
-            console.error('Google kayıt hatası:', error);
-            let errorMessage = 'Google ile kayıt yapılırken bir hata oluştu.';
-            
-            if (error.code === 'auth/popup-closed-by-user') {
-                errorMessage = 'Kayıt penceresi kapatıldı.';
-            }
-            
-            showToast(errorMessage, 'error');
-        }
-    });
-
-    // ============================================
-    // KATEGORİ FİLTRELEME (Faz 1'den kalan)
-    // ============================================
-    const categoryButtons = document.querySelectorAll('.category-btn');
-    const newsCards = document.querySelectorAll('.news-card');
-
-    categoryButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            categoryButtons.forEach(btn => btn.classList.remove('active'));
-            this.classList.add('active');
-
-            const selectedCategory = this.getAttribute('data-category');
-
-            newsCards.forEach(card => {
-                if (selectedCategory === 'all') {
-                    card.style.display = 'block';
-                    card.style.opacity = '0';
-                    setTimeout(() => {
-                        card.style.transition = 'opacity 0.4s ease';
-                        card.style.opacity = '1';
-                    }, 50);
-                } else {
-                    const cardCategory = card.querySelector('.news-category').textContent.toLowerCase();
-                    
-                    let isVisible = false;
-                    switch(selectedCategory) {
-                        case 'fizik':
-                            isVisible = cardCategory.includes('fizik');
-                            break;
-                        case 'cevre':
-                            isVisible = cardCategory.includes('çevre') || cardCategory.includes('dünya');
-                            break;
-                        case 'teknoloji':
-                            isVisible = cardCategory.includes('teknoloji');
-                            break;
-                        case 'uzay':
-                            isVisible = cardCategory.includes('uzay');
-                            break;
-                        case 'girisimcilik':
-                            isVisible = cardCategory.includes('girişimcilik');
-                            break;
-                        case 'tip':
-                            isVisible = cardCategory.includes('tıp') || cardCategory.includes('sağlık');
-                            break;
-                        case 'sosyal':
-                            isVisible = cardCategory.includes('sosyal');
-                            break;
-                        default:
-                            isVisible = true;
-                    }
-
-                    if (isVisible) {
-                        card.style.display = 'block';
-                        card.style.opacity = '0';
-                        setTimeout(() => {
-                            card.style.transition = 'opacity 0.4s ease';
-                            card.style.opacity = '1';
-                        }, 50);
-                    } else {
-                        card.style.display = 'none';
-                    }
-                }
-            });
-        });
-    });
-
-    // ============================================
-    // NAVBAR SCROLL EFEKTİ (Faz 1'den kalan)
-    // ============================================
-    const navbar = document.querySelector('.navbar');
-    let lastScrollY = window.scrollY;
-
-    window.addEventListener('scroll', () => {
-        if (window.scrollY > 50) {
-            navbar.style.background = 'rgba(255, 255, 255, 0.85)';
-            navbar.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.1)';
+        if (data.cover && data.cover.trim() !== '') {
+            coverEl.src = data.cover;
+            coverEl.style.display = 'block';
         } else {
-            navbar.style.background = 'rgba(255, 255, 255, 0.7)';
-            navbar.style.boxShadow = 'none';
+            coverEl.style.display = 'none';
         }
-        lastScrollY = window.scrollY;
-    });
 
-    // ============================================
-    // YARDIMCI FONKSİYONLAR
-    // ============================================
-    
-    // UI'yi giriş yapmış kullanıcıya göre güncelle
-    function updateUIForLoggedInUser(user) {
-        guestButtons.style.display = 'none';
-        profileMenu.style.display = 'block';
+        let htmlContent = data.content || 'İçerik bulunamadı.';
+        htmlContent = htmlContent.replace(/\n/g, '<br>');
+        htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        contentEl.innerHTML = htmlContent;
 
-        // Profil bilgilerini güncelle
-        const profileName = document.getElementById('profileName');
-        const profileAvatar = document.getElementById('profileAvatar');
-        const dropdownEmail = document.getElementById('dropdownEmail');
-        const dropdownRole = document.getElementById('dropdownRole');
+        sourcesList.innerHTML = '';
+        if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
+            sourcesSection.style.display = 'block';
+            data.sources.forEach(src => {
+                if(src.url && src.url.trim() !== '') {
+                    const a = document.createElement('a');
+                    a.href = src.url;
+                    a.target = "_blank";
+                    a.rel = "noopener noreferrer";
+                    a.className = 'source-item';
+                    a.innerHTML = `<span class="material-icons-round" style="font-size:16px; vertical-align:middle; margin-right:5px;">link</span> ${src.title || src.url}`;
+                    sourcesList.appendChild(a);
+                }
+            });
+        } else {
+            sourcesSection.style.display = 'none';
+        }
 
-        const displayName = user.displayName || user.email.split('@')[0];
-        const initial = displayName.charAt(0).toUpperCase();
+        const currentUrl = encodeURIComponent(window.location.href.split('?')[0] + '?id=' + id);
+        const shareText = encodeURIComponent(data.title + " - BİFTEK Haber Sitesi");
+        
+        const btnX = document.getElementById('share-x');
+        const btnWa = document.getElementById('share-wa');
+        const btnLi = document.getElementById('share-li');
+        const btnCopy = document.getElementById('copy-link');
 
-        profileName.textContent = displayName;
-        profileAvatar.textContent = initial;
-        dropdownEmail.textContent = user.email;
+        if(btnX) btnX.onclick = () => window.open(`https://twitter.com/intent/tweet?text=${shareText}&url=${currentUrl}`, '_blank');
+        if(btnWa) btnWa.onclick = () => window.open(`https://wa.me/?text=${shareText}%20${currentUrl}`, '_blank');
+        if(btnLi) btnLi.onclick = () => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${currentUrl}`, '_blank');
+        
+        if(btnCopy) {
+            btnCopy.onclick = () => {
+                const fullUrl = window.location.href.split('?')[0] + '?id=' + id;
+                navigator.clipboard.writeText(fullUrl).then(() => {
+                    UI.showToast("Bağlantı panoya kopyalandı!");
+                }).catch(() => {
+                    UI.showToast("Kopyalama başarısız.");
+                });
+            };
+        }
 
-        // Kullanıcı rolünü getir
-        db.collection('users').doc(user.uid).get().then(doc => {
-            if (doc.exists) {
-                const userData = doc.data();
-                const roleText = getRoleText(userData.role);
-                dropdownRole.textContent = roleText;
+        document.getElementById('like-btn')?.addEventListener('click', () => UI.showToast("Beğeni kaydedildi!"));
+        document.getElementById('bookmark-btn')?.addEventListener('click', () => UI.showToast("Favorilere eklendi!"));
 
-                // Yazar veya admin ise "Yazar Ol" butonunu gizle
-                const becomeWriterBtn = document.getElementById('becomeWriterBtn');
-                if (userData.role === 'writer' || userData.role === 'admin') {
-                    becomeWriterBtn.style.display = 'none';
-                } else {
-                    becomeWriterBtn.style.display = 'flex';
+        const submitFb = document.getElementById('submit-fb');
+        if(submitFb) {
+            submitFb.onclick = async () => {
+                const name = document.getElementById('fb-name').value || 'Misafir';
+                const msg = document.getElementById('fb-msg').value;
+                if(!msg || msg.trim() === '') return UI.showToast("Lütfen bir mesaj yazın.");
+                
+                try {
+                    await addDoc(collection(db, "feedback"), {
+                        articleId: id,
+                        name: name,
+                        message: msg,
+                        date: serverTimestamp()
+                    });
+                    UI.showToast("Geri bildiriminiz için teşekkürler!");
+                    document.getElementById('fb-msg').value = '';
+                    document.getElementById('fb-name').value = '';
+                } catch(e) {
+                    UI.showToast("Gönderim hatası: " + e.message);
+                }
+            };
+        }
+
+        const ttsBtn = document.getElementById('tts-btn');
+        if(ttsBtn) {
+            ttsBtn.onclick = () => {
+                if(speechSynthesis.speaking) {
+                    speechSynthesis.cancel();
+                    ttsBtn.innerHTML = '<span class="material-icons-round" style="vertical-align: middle; margin-right:5px;">volume_up</span> Haberi Sesli Oku';
+                    return;
+                }
+                const utterance = new SpeechSynthesisUtterance(data.content);
+                utterance.lang = 'tr-TR';
+                utterance.rate = 1.0;
+                speechSynthesis.speak(utterance);
+                ttsBtn.innerHTML = '<span class="material-icons-round" style="vertical-align: middle; margin-right:5px;">stop</span> Durdur';
+                
+                utterance.onend = () => {
+                    ttsBtn.innerHTML = '<span class="material-icons-round" style="vertical-align: middle; margin-right:5px;">volume_up</span> Haberi Sesli Oku';
+                };
+            };
+        }
+    }
+};
+
+// ==========================================
+// 🎮 7. RETRO OYUNLAR (TEMİZLENMİŞ)
+// ==========================================
+const GameHelper = {
+    ctx: null,
+    keys: {},
+    init(canvas) {
+        if (!canvas) return false;
+        this.ctx = canvas.getContext('2d');
+        this.ctx.font = '16px Inter, sans-serif';
+        this.ctx.textAlign = 'left';
+        this.ctx.imageSmoothingEnabled = false;
+        
+        if(Object.keys(this.keys).length === 0) {
+            window.addEventListener('keydown', (e) => {
+                this.keys[e.key] = true;
+                if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                    e.preventDefault();
+                }
+            });
+            window.addEventListener('keyup', (e) => this.keys[e.key] = false);
+        }
+        return true;
+    },
+    clear(canvas) {
+        if(!this.ctx || !canvas) return;
+        this.ctx.clearRect(0, 0, canvas.width, canvas.height);
+    },
+    rect(x, y, w, h, color) {
+        if(!this.ctx) return;
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(x, y, w, h);
+    },
+    text(txt, x, y, color = '#fff', size = '16px') {
+        if(!this.ctx) return;
+        this.ctx.fillStyle = color;
+        this.ctx.font = `${size} Inter, sans-serif`;
+        this.ctx.fillText(txt, x, y);
+    }
+};
+
+// --- OYUN: SNAKE ---
+const SnakeGame = {
+    snake: [], food: {x: 0, y: 0}, dx: 0, dy: 0, score: 0, gridSize: 20, lastRenderTime: 0, speed: 5,
+
+    init(canvas) {
+        if (!GameHelper.init(canvas)) return;
+        this.reset();
+        document.getElementById('start-game-btn').onclick = () => this.start();
+        document.getElementById('pause-game-btn').onclick = () => this.pause();
+        document.getElementById('stop-game-btn').onclick = () => this.stop();
+    },
+
+    reset() {
+        const cols = Math.floor(elements.gameCanvas.width / this.gridSize);
+        const rows = Math.floor(elements.gameCanvas.height / this.gridSize);
+        this.snake = [{x: Math.floor(cols/2), y: Math.floor(rows/2)}];
+        this.dx = 1; this.dy = 0;
+        this.score = 0;
+        this.generateFood();
+        this.lastRenderTime = 0;
+    },
+
+    generateFood() {
+        const cols = Math.floor(elements.gameCanvas.width / this.gridSize);
+        const rows = Math.floor(elements.gameCanvas.height / this.gridSize);
+        let newFood;
+        do {
+            newFood = { x: Math.floor(Math.random() * cols), y: Math.floor(Math.random() * rows) };
+        } while (this.snake.some(segment => segment.x === newFood.x && segment.y === newFood.y));
+        this.food = newFood;
+    },
+
+    start() {
+        if (gameAnimationFrame) return;
+        activeGame = 'snake';
+        currentGameInstance = this;
+        
+        const loop = (currentTime) => {
+            if (activeGame !== 'snake') return;
+            window.requestAnimationFrame(loop);
+            const secondsSinceLastRender = (currentTime - this.lastRenderTime) / 1000;
+            if (secondsSinceLastRender < 1 / this.speed) return;
+            this.lastRenderTime = currentTime;
+            this.update();
+            this.draw();
+        };
+        window.requestAnimationFrame(loop);
+    },
+
+    pause() {
+        if(activeGame === 'snake') {
+            activeGame = 'paused';
+            if(gameAnimationFrame) cancelAnimationFrame(gameAnimationFrame);
+            gameAnimationFrame = null;
+            GameHelper.text("DURAKLATILDI", elements.gameCanvas.width/2 - 60, elements.gameCanvas.height/2, '#fff', '24px');
+        } else if (activeGame === 'paused') {
+            activeGame = 'snake';
+            this.start();
+        }
+    },
+
+    stop() {
+        if (gameAnimationFrame) { cancelAnimationFrame(gameAnimationFrame); gameAnimationFrame = null; }
+        activeGame = null;
+        currentGameInstance = null;
+        GameHelper.clear(elements.gameCanvas);
+        GameHelper.text("Oyun Durduruldu.", 150, 200, '#aaa');
+    },
+
+    update() {
+        const head = {x: this.snake[0].x + this.dx, y: this.snake[0].y + this.dy};
+        const cols = Math.floor(elements.gameCanvas.width / this.gridSize);
+        const rows = Math.floor(elements.gameCanvas.height / this.gridSize);
+
+        if (head.x < 0 || head.y < 0 || head.x >= cols || head.y >= rows) {
+            this.stop(); UI.showToast("Snake oyunu bitti! (Duvara çarptın)"); return;
+        }
+        if (this.snake.some(segment => segment.x === head.x && segment.y === head.y)) {
+            this.stop(); UI.showToast("Snake oyunu bitti! (Kendine çarptın)"); return;
+        }
+
+        this.snake.unshift(head);
+        if (head.x === this.food.x && head.y === this.food.y) {
+            this.score++;
+            this.speed = Math.min(15, 5 + Math.floor(this.score / 2));
+            this.generateFood();
+        } else {
+            this.snake.pop();
+        }
+
+        if (GameHelper.keys['ArrowUp'] && this.dy === 0) { this.dx = 0; this.dy = -1; }
+        if (GameHelper.keys['ArrowDown'] && this.dy === 0) { this.dx = 0; this.dy = 1; }
+        if (GameHelper.keys['ArrowLeft'] && this.dx === 0) { this.dx = -1; this.dy = 0; }
+        if (GameHelper.keys['ArrowRight'] && this.dx === 0) { this.dx = 1; this.dy = 0; }
+    },
+
+    draw() {
+        GameHelper.clear(elements.gameCanvas);
+        GameHelper.rect(0, 0, elements.gameCanvas.width, elements.gameCanvas.height, '#111');
+        this.snake.forEach((segment, i) => {
+            GameHelper.rect(segment.x * this.gridSize, segment.y * this.gridSize, this.gridSize - 1, this.gridSize - 1, i === 0 ? '#0f0' : '#0b0');
+        });
+        GameHelper.rect(this.food.x * this.gridSize, this.food.y * this.gridSize, this.gridSize - 1, this.gridSize - 1, '#f00');
+        GameHelper.text(`Skor: ${this.score}`, 10, 25, '#fff', '18px');
+    }
+};
+
+// --- OYUN: SPACE INVADERS ---
+const SpaceInvadersGame = {
+    player: { x: 0, width: 40, height: 20, speed: 5 },
+    aliens: [], bullets: [], alienBullets: [],
+    score: 0, lives: 3, alienRows: 4, alienCols: 8,
+    alienSpeed: 1, alienDirection: 1, lastAlienShot: 0,
+
+    init(canvas) {
+        if (!GameHelper.init(canvas)) return;
+        this.reset();
+        document.getElementById('start-game-btn').onclick = () => this.start();
+        document.getElementById('pause-game-btn').onclick = () => this.pause();
+        document.getElementById('stop-game-btn').onclick = () => this.stop();
+    },
+
+    reset() {
+        this.player.x = (elements.gameCanvas.width - this.player.width) / 2;
+        this.bullets = []; this.alienBullets = []; this.aliens = [];
+        this.score = 0; this.lives = 3; this.alienSpeed = 1;
+        for (let r = 0; r < this.alienRows; r++) {
+            for (let c = 0; c < this.alienCols; c++) {
+                this.aliens.push({ x: c * 50 + 50, y: r * 40 + 50, width: 30, height: 20, alive: true });
+            }
+        }
+    },
+
+    start() {
+        if (gameAnimationFrame) return;
+        activeGame = 'space';
+        currentGameInstance = this;
+        const loop = (currentTime) => {
+            if (activeGame !== 'space') return;
+            window.requestAnimationFrame(loop);
+            this.update(currentTime);
+            this.draw();
+        };
+        window.requestAnimationFrame(loop);
+    },
+
+    pause() {
+        if(activeGame === 'space') {
+            activeGame = 'paused';
+            if(gameAnimationFrame) cancelAnimationFrame(gameAnimationFrame);
+            gameAnimationFrame = null;
+            GameHelper.text("DURAKLATILDI", elements.gameCanvas.width/2 - 60, elements.gameCanvas.height/2, '#fff', '24px');
+        } else if (activeGame === 'paused') {
+            activeGame = 'space';
+            this.start();
+        }
+    },
+
+    stop() {
+        if (gameAnimationFrame) { cancelAnimationFrame(gameAnimationFrame); gameAnimationFrame = null; }
+        activeGame = null;
+        currentGameInstance = null;
+        GameHelper.clear(elements.gameCanvas);
+        GameHelper.text("Oyun Durduruldu.", 150, 200, '#aaa');
+    },
+
+    update(currentTime) {
+        if (GameHelper.keys['a'] || GameHelper.keys['ArrowLeft']) this.player.x = Math.max(0, this.player.x - this.player.speed);
+        if (GameHelper.keys['d'] || GameHelper.keys['ArrowRight']) this.player.x = Math.min(elements.gameCanvas.width - this.player.width, this.player.x + this.player.speed);
+        if ((GameHelper.keys[' '] || GameHelper.keys['Enter']) && this.canShoot()) this.shoot();
+
+        this.bullets = this.bullets.filter(bullet => { bullet.y -= 7; return bullet.y > 0; });
+        this.alienBullets = this.alienBullets.filter(bullet => { bullet.y += 5; return bullet.y < elements.gameCanvas.height; });
+
+        let moveDown = false;
+        let activeAliens = this.aliens.filter(a => a.alive);
+        if(activeAliens.length === 0) { this.alienSpeed += 0.5; this.reset(); return; }
+
+        activeAliens.forEach(alien => {
+            alien.x += this.alienSpeed * this.alienDirection;
+            if (alien.x <= 0 || alien.x + alien.width >= elements.gameCanvas.width) moveDown = true;
+        });
+
+        if (moveDown) {
+            this.alienDirection *= -1;
+            this.aliens.forEach(alien => alien.y += 20);
+        }
+
+        if (currentTime - this.lastAlienShot > 1000 && activeAliens.length > 0) {
+            const shooter = activeAliens[Math.floor(Math.random() * activeAliens.length)];
+            this.alienBullets.push({ x: shooter.x + shooter.width / 2, y: shooter.y + shooter.height });
+            this.lastAlienShot = currentTime;
+        }
+
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            for (let j = this.aliens.length - 1; j >= 0; j--) {
+                if (this.aliens[j].alive && this.isColliding(this.bullets[i], this.aliens[j])) {
+                    this.bullets.splice(i, 1);
+                    this.aliens[j].alive = false;
+                    this.score += 10;
+                    break;
                 }
             }
+        }
+
+        for (let i = this.alienBullets.length - 1; i >= 0; i--) {
+            if (this.isColliding(this.alienBullets[i], this.player)) {
+                this.alienBullets.splice(i, 1);
+                this.lives--;
+                if (this.lives <= 0) { this.stop(); UI.showToast("Space Invaders oyunu bitti! Skor: " + this.score); }
+                break;
+            }
+        }
+    },
+
+    draw() {
+        GameHelper.clear(elements.gameCanvas);
+        GameHelper.rect(0, 0, elements.gameCanvas.width, elements.gameCanvas.height, '#000');
+        GameHelper.rect(this.player.x, elements.gameCanvas.height - 30, this.player.width, this.player.height, '#0af');
+        this.aliens.forEach(alien => {
+            if(alien.alive) {
+                GameHelper.rect(alien.x, alien.y, alien.width, alien.height, '#f0f');
+                GameHelper.rect(alien.x + 5, alien.y + 5, 5, 5, '#000');
+                GameHelper.rect(alien.x + 20, alien.y + 5, 5, 5, '#000');
+            }
         });
+        this.bullets.forEach(bullet => GameHelper.rect(bullet.x - 2, bullet.y, 4, 10, '#ff0'));
+        this.alienBullets.forEach(bullet => GameHelper.rect(bullet.x - 2, bullet.y, 4, 10, '#f00'));
+        GameHelper.text(`Skor: ${this.score}`, 10, 25, '#fff', '18px');
+        GameHelper.text(`Can: ${'❤️'.repeat(this.lives)}`, 10, 45, '#fff', '18px');
+    },
+
+    canShoot() { return this.bullets.length === 0 || this.bullets[this.bullets.length - 1].y < elements.gameCanvas.height - 100; },
+    shoot() { this.bullets.push({ x: this.player.x + this.player.width / 2, y: elements.gameCanvas.height - 30 }); },
+    isColliding(obj1, obj2) {
+        return obj1.x < obj2.x + obj2.width && obj1.x + 4 > obj2.x && obj1.y < obj2.y + obj2.height && obj1.y + 10 > obj2.y;
     }
+};
 
-    // UI'yi çıkış yapmış kullanıcıya göre güncelle
-    function updateUIForLoggedOutUser() {
-        guestButtons.style.display = 'flex';
-        profileMenu.style.display = 'none';
-        profileBtn.classList.remove('active');
-        profileDropdown.classList.remove('active');
+const Games = {
+    stopAll: () => {
+        if (gameAnimationFrame) cancelAnimationFrame(gameAnimationFrame);
+        gameAnimationFrame = null;
+        activeGame = null;
+        currentGameInstance = null;
+        if(elements.gameCanvas) GameHelper.clear(elements.gameCanvas);
     }
+};
 
-    // Rol metnini al
-    function getRoleText(role) {
-        switch(role) {
-            case 'admin':
-                return 'Yönetici';
-            case 'writer':
-                return 'Yazar';
-            case 'member':
-            default:
-                return 'Üye';
-        }
-    }
-
-    // Çıkış yap
-    async function logout() {
-        try {
-            await auth.signOut();
-            showToast('Çıkış yapıldı.', 'success');
-            profileBtn.classList.remove('active');
-            profileDropdown.classList.remove('active');
-        } catch (error) {
-            console.error('Çıkış hatası:', error);
-            showToast('Çıkış yapılırken bir hata oluştu.', 'error');
-        }
-    }
-
-    // Toast bildirimi göster
-    function showToast(message, type = 'info') {
-        const toast = document.getElementById('toast');
-        const toastMessage = document.getElementById('toastMessage');
-
-        toastMessage.textContent = message;
-        toast.className = 'toast';
-        
-        if (type === 'success') {
-            toast.classList.add('success');
-        } else if (type === 'error') {
-            toast.classList.add('error');
-        }
-
-        toast.classList.add('active');
-
-        setTimeout(() => {
-            toast.classList.remove('active');
-        }, 3000);
-    }
-
-    // Haber kartlarına tıklama efekti
-    newsCards.forEach(card => {
-        card.addEventListener('click', function() {
-            console.log('Haber kartı tıklandı:', this.querySelector('.news-title').textContent);
-        });
-    });
-
-    // Smooth scroll animasyonu
-    const newsSection = document.querySelector('.news-section');
-    newsSection.style.opacity = '0';
-    newsSection.style.transform = 'translateY(20px)';
-    
-    setTimeout(() => {
-        newsSection.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-        newsSection.style.opacity = '1';
-        newsSection.style.transform = 'translateY(0)';
-    }, 100);
-
-    console.log('BİFTEK Haber Sitesi başarıyla yüklendi!');
-    console.log('Firebase Auth ve Firestore entegre edildi.');
+document.getElementById('play-snake')?.addEventListener('click', () => {
+    Games.stopAll();
+    SnakeGame.init(elements.gameCanvas);
+    SnakeGame.start();
+});
+document.getElementById('play-space')?.addEventListener('click', () => {
+    Games.stopAll();
+    SpaceInvadersGame.init(elements.gameCanvas);
+    SpaceInvadersGame.start();
 });
 
+// ==========================================
+// 💬 8. CHATBOT
+// ==========================================
+const Chatbot = {
+    messages: [
+        { type: 'bot', text: "Merhaba! BİFTEK Konu Asistanı'na hoş geldin." },
+        { type: 'bot', text: "Hangi alanda yazı yazmak istersin?" }
+    ],
+    init: () => {
+        const toggleBtn = document.getElementById('chatbot-toggle');
+        const sendBtn = document.getElementById('send-msg');
+        const input = document.getElementById('msg-input');
+        
+        if(toggleBtn) toggleBtn.addEventListener('click', Chatbot.toggle);
+        if(sendBtn) sendBtn.addEventListener('click', Chatbot.sendMessage);
+        if(input) input.addEventListener('keypress', (e) => { if (e.key === 'Enter') Chatbot.sendMessage(); });
+        Chatbot.render();
+    },
+    toggle: () => {
+        if(elements.chatbotWindow) {
+            elements.chatbotWindow.classList.toggle('open');
+            if(elements.chatbotWindow.classList.contains('open')) setTimeout(() => document.getElementById('msg-input')?.focus(), 100);
+        }
+    },
+    sendMessage: () => {
+        const input = document.getElementById('msg-input');
+        const msg = input?.value.trim();
+        if (!msg) return;
+        Chatbot.addMessage('user', msg);
+        if(input) input.value = '';
+        setTimeout(() => {
+            Chatbot.addMessage('bot', Chatbot.getBotResponse(msg));
+        }, 600);
+    },
+    addMessage: (type, text) => {
+        Chatbot.messages.push({ type, text });
+        Chatbot.render();
+        Chatbot.scrollToBottom();
+    },
+    getBotResponse: (userMsg) => {
+        const lowerMsg = userMsg.toLowerCase();
+        if (lowerMsg.includes("merhaba")) return "Merhaba! Size nasıl yardımcı olabilirim?";
+        if (lowerMsg.includes("robot")) return "Robotik harika! Arduino sensörleri veya otonom araçlar üzerine yazabilirsin.";
+        if (lowerMsg.includes("kod")) return "Python ile veri analizi veya JavaScript ile web projeleri popülerdir.";
+        if (lowerMsg.includes("teknoloji")) return "Yapay Zeka, Siber Güvenlik ve IoT güncel konulardır.";
+        const suggestions = ["Kuantum Bilgisayarlar", "Mars Kolonizasyonu", "CRISPR Gen Düzenleme", "Füzyon Enerjisi"];
+        return `Belki şuna değinmek istersin: "${suggestions[Math.floor(Math.random() * suggestions.length)]}"`;
+    },
+    render: () => {
+        const container = document.getElementById('chat-messages');
+        if (!container) return;
+        container.innerHTML = Chatbot.messages.map(m => `<div class="msg ${m.type}">${m.text}</div>`).join('');
+    },
+    scrollToBottom: () => {
+        const container = document.getElementById('chat-messages');
+        if (container) container.scrollTop = container.scrollHeight;
+    }
+};
 
-// ============================================
-// FAZ 8: KAYNAKÇA, PAYLAŞIM, KONU ASİSTANI VE OYUNLAR
-// ============================================
-
-const topicAssistant = {
-    topicPool: ["Kuantum İnternet", "CRISPR Gen Düzenleme", "Mars Kolonizasyonu", "Yapay Sinir Ağları", "Füzyon Enerjisi", "Nöromorfik Bilgisayar", "Biyo-yazıcılar", "Karanlık Madde", "6G Teknolojisi", "Sentetik Biyoloji"],
-    
-    async getWrittenTopics() {
-        try {
-            const snapshot = await db.collection('articles').get();
-            const topics = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                if (data.title) topics.push(data.title.toLowerCase());
+// ==========================================
+// 👩‍💻 9. YAZAR PANELİ
+// ==========================================
+const WriterPanel = {
+    init: () => {
+        const publishBtn = document.getElementById('wp-publish');
+        const aiImgBtn = document.getElementById('wp-ai-image');
+        const contentArea = document.getElementById('wp-content');
+        
+        if(publishBtn) publishBtn.addEventListener('click', WriterPanel.publish);
+        if(aiImgBtn) {
+            aiImgBtn.addEventListener('click', () => {
+                const cat = document.getElementById('wp-cat').value;
+                const randomUrl = `https://picsum.photos/seed/${cat}${Math.random()}/800/600`;
+                document.getElementById('wp-cover').value = randomUrl;
+                UI.showToast("Görsel önerildi!");
             });
-            return topics;
-        } catch (error) { return []; }
+        }
+        if(contentArea) {
+            contentArea.addEventListener('input', () => {
+                const text = contentArea.value;
+                const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+                document.getElementById('word-count').textContent = words;
+                document.getElementById('read-time').textContent = Math.ceil(words / 200);
+                localStorage.setItem('bifteck_draft', text);
+            });
+            const draft = localStorage.getItem('bifteck_draft');
+            if(draft) { contentArea.value = draft; contentArea.dispatchEvent(new Event('input')); }
+        }
+        WriterPanel.loadMyArticles();
     },
-    
-    async suggestTopic() {
-        const written = await this.getWrittenTopics();
-        const available = this.topicPool.filter(t => !written.some(w => t.toLowerCase().includes(w)));
-        return available.length > 0 ? available[Math.floor(Math.random() * available.length)] : "Kendi konunu oluştur!";
+    publish: async () => {
+        const title = document.getElementById('wp-title').value;
+        const content = document.getElementById('wp-content').value;
+        const category = document.getElementById('wp-cat').value;
+        const cover = document.getElementById('wp-cover').value;
+        const sourcesRaw = document.getElementById('wp-sources').value;
+
+        if (!title || !content) return UI.showToast("Başlık ve içerik zorunludur.");
+
+        const sources = sourcesRaw.split('\n').filter(l => l.trim() !== '').map(line => {
+            const parts = line.split(',');
+            return { title: parts[0]?.trim(), url: parts[1]?.trim() || '#' };
+        });
+
+        try {
+            await addDoc(collection(db, "articles"), {
+                title, content, category, cover: cover || '', sources,
+                authorId: currentUser.uid,
+                authorName: currentUser.displayName || currentUser.email.split('@')[0],
+                createdAt: serverTimestamp(),
+                excerpt: content.substring(0, 150)
+            });
+            localStorage.removeItem('bifteck_draft');
+            UI.showToast("Makale yayınlandı!");
+            document.getElementById('wp-title').value = '';
+            document.getElementById('wp-content').value = '';
+            document.getElementById('wp-cover').value = '';
+            document.getElementById('wp-sources').value = '';
+            document.getElementById('word-count').textContent = '0';
+            document.getElementById('read-time').textContent = '0';
+            WriterPanel.loadMyArticles();
+        } catch (error) {
+            UI.showToast("Yayın hatası: " + error.message);
+        }
     },
-    
-    async sendMessage(msg) {
-        const div = document.getElementById('assistantMessages');
-        div.appendChild(Object.assign(document.createElement('div'), {className:'assistant-message user', textContent:msg}));
-        const bot = Object.assign(document.createElement('div'), {className:'assistant-message bot', textContent:'Öneri hazırlanıyor...'});
-        div.appendChild(bot);
-        const sug = await this.suggestTopic();
-        setTimeout(() => { bot.textContent = '📝 Öneri: '+sug; div.scrollTop = div.scrollHeight; }, 1000);
+    loadMyArticles: async () => {
+        if (!currentUser) return;
+        const listEl = document.getElementById('my-articles-list');
+        if (!listEl) return;
+        try {
+            const q = query(collection(db, "articles"), where("authorId", "==", currentUser.uid), orderBy("createdAt", "desc"));
+            const snapshot = await getDocs(q);
+            listEl.innerHTML = '';
+            if (snapshot.empty) {
+                listEl.innerHTML = '<p style="color:var(--text-secondary); font-size:14px; text-align:center; padding:20px;">Henüz yazınız yok.</p>';
+                return;
+            }
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const item = document.createElement('div');
+                item.style.cssText = "background:var(--card-bg); padding:15px; border-radius:12px; box-shadow:0 2px 5px rgba(0,0,0,0.05); display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;";
+                item.innerHTML = `
+                    <div style="flex:1; min-width:200px;">
+                        <div style="font-weight:600; color:var(--text-primary);">${data.title}</div>
+                        <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
+                            <span style="background:rgba(0,113,227,0.1); color:var(--accent); padding:2px 6px; border-radius:6px; font-weight:600;">${data.category}</span>
+                            <span style="margin-left:10px;">${new Date(data.createdAt.seconds * 1000).toLocaleDateString('tr-TR')}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn btn-sm btn-outline" onclick="alert('Düzenleme yakında eklenecek.')">Düzenle</button>
+                        <button class="btn btn-sm btn-danger" onclick="window.writerPanelDelete('${docSnap.id}')">Sil</button>
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+        } catch (error) {
+            console.error("Yükleme hatası:", error);
+            listEl.innerHTML = '<p style="color:var(--danger);">Hata oluştu.</p>';
+        }
+    },
+    delete: async (id) => {
+        if (!confirm("Silmek istediğinize emin misiniz?")) return;
+        try {
+            await deleteDoc(doc(db, "articles", id));
+            UI.showToast("Makale silindi.");
+            WriterPanel.loadMyArticles();
+        } catch (error) {
+            UI.showToast("Silme hatası: " + error.message);
+        }
     }
 };
 
-const gameEngine = {
-    snakeGame: null, invadersGame: null, platformGame: null,
-    
-    startSnake() {
-        const canvas = document.getElementById('snakeCanvas'), ctx = canvas.getContext('2d');
-        const scoreEl = document.getElementById('snakeScore'), gridSize = 20;
-        let snake = [{x:10,y:10}], food = {x:15,y:15}, dx=1, dy=0, score=0;
-        
-        const draw = () => {
-            ctx.fillStyle='#1d1d1f'; ctx.fillRect(0,0,canvas.width,canvas.height);
-            ctx.fillStyle='#34a853'; snake.forEach(s => { ctx.beginPath(); ctx.arc(s.x*gridSize+10,s.y*gridSize+10,8,0,Math.PI*2); ctx.fill(); });
-            ctx.fillStyle='#667eea'; ctx.beginPath(); ctx.arc(food.x*gridSize+10,food.y*gridSize+10,8,0,Math.PI*2); ctx.fill();
-        };
-        
-        const update = () => {
-            const head = {x:snake[0].x+dx, y:snake[0].y+dy};
-            if(head.x<0||head.x>=20||head.y<0||head.y>=20||snake.some(s=>s.x===head.x&&s.y===head.y)) { clearInterval(loop); alert('Skor:'+score); return; }
-            snake.unshift(head);
-            if(head.x===food.x&&head.y===food.y) { score+=10; scoreEl.textContent=score; food={x:Math.floor(Math.random()*20),y:Math.floor(Math.random()*20)}; }
-            else snake.pop();
-        };
-        
-        const keyHandler = e => { if(e.key==='ArrowUp'&&dy!==1){dx=0;dy=-1;} if(e.key==='ArrowDown'&&dy!==-1){dx=0;dy=1;} if(e.key==='ArrowLeft'&&dx!==1){dx=-1;dy=0;} if(e.key==='ArrowRight'&&dx!==-1){dx=1;dy=0;} };
-        document.addEventListener('keydown',keyHandler);
-        const loop = setInterval(()=>{update();draw();},150);
-        this.snakeGame = {stop:()=>{clearInterval(loop);document.removeEventListener('keydown',keyHandler);}};
+// ==========================================
+// 👨‍💼 10. YÖNETİCİ PANELİ
+// ==========================================
+const AdminPanel = {
+    load: async () => {
+        AdminPanel.loadApplications();
+        AdminPanel.loadUsers();
+        AdminPanel.loadArticles();
+        AdminPanel.loadStats();
     },
-    
-    startInvaders() {
-        const canvas=document.getElementById('invadersCanvas'), ctx=canvas.getContext('2d'), scoreEl=document.getElementById('invadersScore');
-        const player={x:180,y:450,w:40,h:30}, bullets=[], asteroids=[]; let score=0, keys={};
-        
-        const draw = () => {
-            ctx.fillStyle='#1d1d1f'; ctx.fillRect(0,0,400,500);
-            ctx.fillStyle='#34a853'; ctx.beginPath(); ctx.moveTo(player.x+20,player.y); ctx.lineTo(player.x+40,player.y+30); ctx.lineTo(player.x,player.y+30); ctx.closePath(); ctx.fill();
-            ctx.fillStyle='#ea4335'; bullets.forEach(b=>ctx.fillRect(b.x-2,b.y,4,10));
-            ctx.fillStyle='#86868b'; asteroids.forEach(a=>{ctx.beginPath();ctx.arc(a.x+15,a.y+15,15,0,Math.PI*2);ctx.fill();});
-        };
-        
-        const update = () => {
-            if(keys['ArrowLeft']&&player.x>0) player.x-=5; if(keys['ArrowRight']&&player.x<360) player.x+=5;
-            bullets=bullets.filter(b=>{b.y-=10;return b.y>0;});
-            asteroids=asteroids.filter(a=>{a.y+=a.spd; bullets.forEach((b,bi)=>{if(b.x>a.x&&b.x<a.x+30&&b.y>a.y&&b.y<a.y+30){asteroids.splice(asteroids.indexOf(a),1);bullets.splice(bi,1);score+=100;scoreEl.textContent=score;}}); if(a.y>500){clearInterval(loop);alert('Skor:'+score);} return a.y<=500;});
-            if(Math.random()<0.03) asteroids.push({x:Math.random()*370,y:-30,spd:2+Math.random()*2});
-        };
-        
-        canvas.addEventListener('keydown',e=>keys[e.key]=true); canvas.addEventListener('keyup',e=>keys[e.key]=false);
-        canvas.addEventListener('click',()=>bullets.push({x:player.x+20,y:player.y})); canvas.setAttribute('tabindex','0'); canvas.focus();
-        const loop=setInterval(()=>{update();draw();},50);
-        this.invadersGame={stop:()=>clearInterval(loop)};
+    loadStats: async () => {
+        try {
+            const usersSnap = await getDocs(collection(db, "users"));
+            const artsSnap = await getDocs(collection(db, "articles"));
+            const appsSnap = await getDocs(query(collection(db, "applications"), where("status", "==", "pending")));
+            document.getElementById('stat-users').textContent = usersSnap.size;
+            document.getElementById('stat-articles').textContent = artsSnap.size;
+            document.getElementById('stat-apps').textContent = appsSnap.size;
+        } catch (e) { console.error(e); }
     },
-    
-    startPlatformGame() {
-        const canvas=document.getElementById('platformCanvas'), ctx=canvas.getContext('2d');
-        const p={x:50,y:300,w:30,h:30,vx:0,vy:0,g:false}, plats=[{x:0,y:350,w:800,h:50},{x:200,y:280,w:100,h:20},{x:400,y:220,w:100,h:20},{x:600,y:160,w:100,h:20}], goal={x:720,y:120,w:40,h:40};
-        let keys={}, running=true;
-        
-        const upd=()=>{if(!running)return; if(keys['ArrowRight'])p.vx++;if(keys['ArrowLeft'])p.vx--;if(keys[' ']&&p.g){p.vy=-12;p.g=false;} p.vx*=0.8;p.vy+=0.5;p.x+=p.vx;p.y+=p.vy;p.g=false; plats.forEach(pl=>{if(p.x<pl.x+pl.w&&p.x+p.w>pl.x&&p.y+p.h>pl.y&&p.y+p.h<pl.y+pl.h+20&&p.vy>=0){p.g=true;p.vy=0;p.y=pl.y-p.h;}}); if(p.x<0)p.x=0;if(p.x>770)p.x=770;if(p.y>400){p.x=50;p.y=300;p.vx=0;p.vy=0;} if(p.x<goal.x+goal.w&&p.x+p.w>goal.x&&p.y<goal.y+goal.h&&p.y+p.h>goal.y){running=false;alert('Tamamlandı!');}};
-        const drw=()=>{ctx.fillStyle='#000';ctx.fillRect(0,0,800,400);ctx.fillStyle='#667eea';plats.forEach(pl=>ctx.fillRect(pl.x,pl.y,pl.w,pl.h));ctx.fillStyle='#34a853';ctx.fillRect(goal.x,goal.y,goal.w,goal.h);ctx.fillStyle='#ea4335';ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='#fff';ctx.fillRect(p.x+8,p.y+8,6,6);ctx.fillRect(p.x+18,p.y+8,6,6);};
-        const loop=()=>{upd();drw();if(running)requestAnimationFrame(loop);};
-        window.addEventListener('keydown',e=>keys[e.key]=true);window.addEventListener('keyup',e=>keys[e.key]=false);
-        loop();this.platformGame={stop:()=>running=false};
+    loadApplications: async () => {
+        const listEl = document.getElementById('admin-app-list');
+        if (!listEl) return;
+        try {
+            const snapshot = await getDocs(query(collection(db, "applications"), where("status", "==", "pending")));
+            listEl.innerHTML = '';
+            if (snapshot.empty) { listEl.innerHTML = '<p style="color:var(--text-secondary); text-align:center;">Bekleyen başvuru yok.</p>'; return; }
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const item = document.createElement('div');
+                item.style.cssText = "background:var(--card-bg); padding:15px; border-radius:12px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:10px;";
+                item.innerHTML = `
+                    <div style="font-weight:600; color:var(--text-primary); margin-bottom:5px;">${data.displayName} <span style="font-weight:400; color:var(--text-secondary); font-size:13px;">(${data.email})</span></div>
+                    <div style="font-size:13px; color:var(--accent); margin-bottom:5px;"><strong>Uzmanlık:</strong> ${data.expertise || '-'}</div>
+                    <div style="font-size:13px; color:var(--text-secondary); margin-bottom:10px; font-style:italic;">"${data.motivation}"</div>
+                    <div style="display:flex; gap:5px;">
+                        <button class="btn btn-sm btn-primary" onclick="window.adminApprove('${docSnap.id}', '${data.uid}')">Onayla</button>
+                        <button class="btn btn-sm btn-danger" onclick="window.adminReject('${docSnap.id}')">Reddet</button>
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+        } catch (error) { console.error(error); }
+    },
+    approve: async (docId, userId) => {
+        if(!confirm("Onaylamak istiyor musunuz?")) return;
+        try {
+            await updateDoc(doc(db, "users", userId), { role: 'author' });
+            await deleteDoc(doc(db, "applications", docId));
+            UI.showToast("Yazar onaylandı!");
+            AdminPanel.load();
+        } catch (error) { UI.showToast("Hata: " + error.message); }
+    },
+    reject: async (docId) => {
+        if(!confirm("Reddetmek istiyor musunuz?")) return;
+        try {
+            await deleteDoc(doc(db, "applications", docId));
+            UI.showToast("Başvuru reddedildi.");
+            AdminPanel.load();
+        } catch (error) { UI.showToast("Hata: " + error.message); }
+    },
+    loadUsers: async () => {
+        const listEl = document.getElementById('admin-user-list');
+        if (!listEl) return;
+        try {
+            const snapshot = await getDocs(collection(db, "users"));
+            listEl.innerHTML = '';
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const item = document.createElement('div');
+                item.style.cssText = "background:var(--card-bg); padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;";
+                const roleColor = data.role === 'admin' ? 'var(--danger)' : (data.role === 'author' ? 'var(--accent)' : 'var(--text-secondary)');
+                item.innerHTML = `
+                    <div>
+                        <div style="font-weight:600; font-size:14px;">${data.displayName || 'İsimsiz'}</div>
+                        <div style="font-size:12px; color:var(--text-secondary);">${data.email}</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:12px; font-weight:700; color:${roleColor}; background:rgba(0,0,0,0.05); padding:4px 8px; border-radius:6px;">${data.role}</span>
+                        ${data.role !== 'admin' ? `<button class="btn btn-sm btn-outline" onclick="window.adminPromote('${docSnap.id}')">Yükselt</button>` : ''}
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+        } catch (error) { console.error(error); }
+    },
+    promote: async (userId) => {
+        if (!confirm("Yönetici yapmak istiyor musunuz?")) return;
+        try {
+            await updateDoc(doc(db, "users", userId), { role: 'admin' });
+            UI.showToast("Kullanıcı yönetici yapıldı.");
+            AdminPanel.load();
+        } catch (error) { UI.showToast("Hata: " + error.message); }
+    },
+    loadArticles: async () => {
+        const listEl = document.getElementById('admin-article-list');
+        if (!listEl) return;
+        try {
+            const snapshot = await getDocs(query(collection(db, "articles"), orderBy("createdAt", "desc"), limit(20)));
+            listEl.innerHTML = '';
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                const item = document.createElement('div');
+                item.style.cssText = "background:var(--card-bg); padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;";
+                item.innerHTML = `
+                    <div style="flex:1; min-width:200px;">
+                        <div style="font-weight:600; font-size:14px; color:var(--text-primary);">${data.title}</div>
+                        <div style="font-size:11px; color:var(--text-secondary);">${data.authorName} • ${new Date(data.createdAt.seconds * 1000).toLocaleDateString('tr-TR')}</div>
+                    </div>
+                    <button class="btn btn-sm btn-danger" onclick="window.adminDeleteArticle('${docSnap.id}')">Sil</button>
+                `;
+                listEl.appendChild(item);
+            });
+        } catch (error) { console.error(error); }
+    },
+    deleteArticle: async (articleId) => {
+        if (!confirm("Silmek istediğinize emin misiniz?")) return;
+        try {
+            await deleteDoc(doc(db, "articles", articleId));
+            UI.showToast("Makale silindi.");
+            AdminPanel.load();
+        } catch (error) { UI.showToast("Hata: " + error.message); }
     }
 };
 
-document.addEventListener('DOMContentLoaded', function() {
-    const at=document.getElementById('assistantToggle'),ap=document.getElementById('assistantPanel'),ac=document.getElementById('assistantClose'),as=document.getElementById('assistantSendBtn'),ai=document.getElementById('assistantInput');
-    if(at)at.onclick=()=>ap.style.display=ap.style.display==='none'?'block':'none';
-    if(ac)ac.onclick=()=>ap.style.display='none';
-    if(as)as.onclick=()=>{if(ai.value.trim()){topicAssistant.sendMessage(ai.value.trim());ai.value='';}};
-    if(ai)ai.onkeypress=e=>{if(e.key==='Enter'&&ai.value.trim()){topicAssistant.sendMessage(ai.value.trim());ai.value='';}};
+// ==========================================
+// 🧩 11. GLOBAL FONKSİYONLAR
+// ==========================================
+window.app = {
+    showHome: () => { NewsFeed.init(); UI.showSection('home'); },
+    closeModals: () => UI.closeAllModals(),
+    switchModal: (from, to) => { UI.toggleModal(from, false); setTimeout(() => UI.toggleModal(to, true), 300); }
+};
+
+window.writerPanelDelete = (id) => WriterPanel.delete(id);
+window.adminApprove = (docId, userId) => AdminPanel.approve(docId, userId);
+window.adminReject = (docId) => AdminPanel.reject(docId);
+window.adminPromote = (userId) => AdminPanel.promote(userId);
+window.adminDeleteArticle = (id) => AdminPanel.deleteArticle(id);
+window.games = Games;
+
+// ==========================================
+// 🚀 12. BAŞLATMA
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') document.body.setAttribute('data-theme', 'dark');
     
-    const bm=document.getElementById('breakRoomModal'),bw=document.getElementById('becomeWriterBtn');
-    if(bw){const br=document.createElement('a');br.href='#';br.className='dropdown-item';br.innerHTML='<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"2\" y=\"6\" width=\"20\" height=\"12\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/></svg> Mola Ver';bw.parentNode.insertBefore(br,bw.nextSibling);br.onclick=e=>{e.preventDefault();bm.classList.add('active');};}
-    
-    document.querySelector('.play-snake-btn')?.onclick=()=>{document.querySelector('.game-selection').style.display='none';document.getElementById('snakeGameContainer').style.display='flex';gameEngine.startSnake();};
-    document.querySelector('.play-invaders-btn')?.onclick=()=>{document.querySelector('.game-selection').style.display='none';document.getElementById('invadersGameContainer').style.display='flex';gameEngine.startInvaders();};
-    document.getElementById('stopSnakeBtn')?.onclick=()=>{if(gameEngine.snakeGame)gameEngine.snakeGame.stop();document.getElementById('snakeGameContainer').style.display='none';document.querySelector('.game-selection').style.display='grid';};
-    document.getElementById('stopInvadersBtn')?.onclick=()=>{if(gameEngine.invadersGame)gameEngine.invadersGame.stop();document.getElementById('invadersGameContainer').style.display='none';document.querySelector('.game-selection').style.display='grid';};
-    document.getElementById('closeBreakRoomModal')?.onclick=()=>{if(gameEngine.snakeGame)gameEngine.snakeGame.stop();if(gameEngine.invadersGame)gameEngine.invadersGame.stop();bm.classList.remove('active');document.getElementById('snakeGameContainer').style.display='none';document.getElementById('invadersGameContainer').style.display='none';document.querySelector('.game-selection').style.display='grid';};
-    
-    document.getElementById('startPlatformGame')?.onclick=()=>gameEngine.startPlatformGame();
-    document.getElementById('goHome404')?.onclick=()=>{if(gameEngine.platformGame)gameEngine.platformGame.stop();document.getElementById('page404Modal').style.display='none';window.location.href='/';};
-    
-    console.log('FAZ 8: Kaynakça, Paylaşım, Konu Asistanı, Retro Oyunlar yüklendi');
+    const themeToggle = document.getElementById('theme-toggle');
+    if(themeToggle) {
+        themeToggle.addEventListener('click', () => {
+            const isDark = document.body.getAttribute('data-theme') === 'dark';
+            if(isDark) { document.body.removeAttribute('data-theme'); localStorage.setItem('theme', 'light'); }
+            else { document.body.setAttribute('data-theme', 'dark'); localStorage.setItem('theme', 'dark'); }
+        });
+    }
+
+    Auth.init();
+    NewsFeed.init();
+    Chatbot.init();
+
+    window.onclick = (event) => {
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            if (event.target === modal) UI.toggleModal(modal.id, false);
+        });
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const articleId = params.get('id');
+    if (articleId) {
+        UI.showSection('article');
+        document.getElementById('detail-title').textContent = "Haber Yükleniyor...";
+        document.getElementById('detail-content').innerHTML = "<p>Lütfen bekleyin...</p>";
+        getDoc(doc(db, "articles", articleId)).then(docSnap => {
+            if(docSnap.exists()) ArticleDetail.open(articleId, docSnap.data());
+            else { UI.showToast("Haber bulunamadı."); window.app.showHome(); }
+        }).catch(err => { console.error(err); UI.showToast("Hata oluştu."); window.app.showHome(); });
+    } else {
+        UI.showSection('home');
+    }
+    console.log("🚀 BİFTEK Başlatıldı!");
 });
